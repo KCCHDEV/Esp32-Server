@@ -13,10 +13,10 @@ const { PrismaClient } = require('@prisma/client');
 const bcrypt = require('bcryptjs');
 
 // Use appropriate database URL
-const databaseUrl = process.env.NETLIFY_DATABASE_URL || process.env.DATABASE_URL;
+const databaseUrl = process.env.NETLIFY_DATABASE_URL;
 
 if (!databaseUrl) {
-  console.error('❌ No database URL found. Please set DATABASE_URL or NETLIFY_DATABASE_URL');
+  console.error('❌ No database URL found. Please set NETLIFY_DATABASE_URL');
   process.exit(1);
 }
 
@@ -66,7 +66,7 @@ async function main() {
         cwd: __dirname + '/..',
         env: { 
           ...process.env,
-          DATABASE_URL: databaseUrl
+          NETLIFY_DATABASE_URL: databaseUrl
         },
         stdio: 'inherit'
       });

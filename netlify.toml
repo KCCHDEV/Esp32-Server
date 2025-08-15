@@ -57,8 +57,8 @@
   # Disable WebSocket connections in serverless environment
   REACT_APP_ENABLE_SOCKET = "false"
 
-# Note: Set these manually in Netlify Dashboard → Site Settings → Environment Variables:
-# DATABASE_URL (or use Neon extension which sets NETLIFY_DATABASE_URL automatically)
-# NETLIFY_DATABASE_URL (set by Neon extension)
-# NETLIFY_DATABASE_URL_UNPOOLED (set by Neon extension)
-# JWT_SECRET
+# Note: Set these 4 variables in Netlify Dashboard → Site Settings → Environment Variables:
+# JWT_SECRET (your JWT secret key)
+# JWT_EXPIRE (e.g. "7d")
+# NETLIFY_DATABASE_URL (set by Neon extension or manually)
+# NETLIFY_DATABASE_URL_UNPOOLED (set by Neon extension or manually)

@@ -1,7 +1,7 @@
 const { PrismaClient } = require('@prisma/client');
 
-// Use Netlify environment variables if available, fallback to standard DATABASE_URL
-const databaseUrl = process.env.NETLIFY_DATABASE_URL || process.env.DATABASE_URL;
+// Use Netlify environment variables (required)
+const databaseUrl = process.env.NETLIFY_DATABASE_URL;
 
 // Create Prisma client instance
 const prisma = new PrismaClient({
@@ -50,7 +50,7 @@ async function setupDatabase() {
         cwd: __dirname + '/..',
         env: { 
           ...process.env,
-          DATABASE_URL: databaseUrl
+          NETLIFY_DATABASE_URL: databaseUrl
         },
         stdio: 'inherit'
       });
