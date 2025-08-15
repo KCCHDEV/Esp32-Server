@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import {
   Container,
@@ -11,6 +11,7 @@ import {
   Divider,
   InputAdornment,
   IconButton,
+  CircularProgress,
 } from '@mui/material';
 import {
   Visibility,
@@ -19,10 +20,12 @@ import {
   Lock,
   Person,
   Computer,
+  CheckCircle,
 } from '@mui/icons-material';
 import { useForm } from 'react-hook-form';
 import { yupResolver } from '@hookform/resolvers/yup';
 import * as yup from 'yup';
+import axios from 'axios';
 
 import { useAuth } from '../contexts/AuthContext';
 
@@ -52,6 +55,8 @@ const RegisterPage = () => {
   const { register: registerUser, loading, error, clearError } = useAuth();
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+  const [databaseStatus, setDatabaseStatus] = useState('checking'); // checking, ready, needs-setup, setting-up
+  const [setupMessage, setSetupMessage] = useState('');
 
   const {
     register,
@@ -61,7 +66,51 @@ const RegisterPage = () => {
     resolver: yupResolver(schema),
   });
 
+  // Check database status on component mount
+  useEffect(() => {
+    checkDatabaseStatus();
+  }, []);
+
+  const checkDatabaseStatus = async () => {
+    try {
+      const response = await axios.get('/api/auth/database-status');
+      if (response.data.isSetup) {
+        setDatabaseStatus('ready');
+      } else {
+        setDatabaseStatus('needs-setup');
+        setSetupMessage('Database needs initialization');
+      }
+    } catch (error) {
+      console.error('Database status check failed:', error);
+      setDatabaseStatus('needs-setup');
+      setSetupMessage('Database connection failed');
+    }
+  };
+
+  const setupDatabase = async () => {
+    try {
+      setDatabaseStatus('setting-up');
+      setSetupMessage('Setting up database...');
+      
+      const response = await axios.post('/api/auth/setup-database');
+      
+      if (response.data.setupComplete) {
+        setDatabaseStatus('ready');
+        setSetupMessage('Database setup completed! You can now register.');
+      }
+    } catch (error) {
+      console.error('Database setup failed:', error);
+      setDatabaseStatus('needs-setup');
+      setSetupMessage(error.response?.data?.message || 'Database setup failed');
+    }
+  };
+
   const onSubmit = async (data) => {
+    if (databaseStatus !== 'ready') {
+      setSetupMessage('Please setup database first');
+      return;
+    }
+
     clearError();
     const { confirmPassword, ...userData } = data;
     const result = await registerUser(userData);
@@ -76,6 +125,64 @@ const RegisterPage = () => {
 
   const handleClickShowConfirmPassword = () => {
     setShowConfirmPassword(!showConfirmPassword);
+  };
+
+  // Database Status Indicator
+  const DatabaseStatusIndicator = () => {
+    switch (databaseStatus) {
+      case 'checking':
+        return (
+          <Alert severity="info" sx={{ mb: 3 }}>
+            <Box display="flex" alignItems="center" gap={1}>
+              <CircularProgress size={16} />
+              <Typography variant="body2">Checking database status...</Typography>
+            </Box>
+          </Alert>
+        );
+      
+      case 'needs-setup':
+        return (
+          <Alert severity="warning" sx={{ mb: 3 }}>
+            <Typography variant="body2" gutterBottom>
+              {setupMessage}
+            </Typography>
+            <Button
+              variant="contained"
+              size="small"
+              onClick={setupDatabase}
+              startIcon={<CheckCircle />}
+              sx={{ mt: 1 }}
+            >
+              Setup Database
+            </Button>
+          </Alert>
+        );
+      
+      case 'setting-up':
+        return (
+          <Alert severity="info" sx={{ mb: 3 }}>
+            <Box display="flex" alignItems="center" gap={1}>
+              <CircularProgress size={16} />
+              <Typography variant="body2">{setupMessage}</Typography>
+            </Box>
+          </Alert>
+        );
+      
+      case 'ready':
+        return (
+          <Alert severity="success" sx={{ mb: 3 }}>
+            <Box display="flex" alignItems="center" gap={1}>
+              <CheckCircle />
+              <Typography variant="body2">
+                Database is ready! {setupMessage && `${setupMessage}`}
+              </Typography>
+            </Box>
+          </Alert>
+        );
+      
+      default:
+        return null;
+    }
   };
 
   return (
@@ -135,6 +242,9 @@ const RegisterPage = () => {
               Create your account to start building
             </Typography>
           </Box>
+
+          {/* Database Status */}
+          <DatabaseStatusIndicator />
 
           {/* Error Alert */}
           {error && (
@@ -256,21 +366,26 @@ const RegisterPage = () => {
               type="submit"
               fullWidth
               variant="contained"
-              disabled={loading}
+              disabled={loading || databaseStatus !== 'ready'}
               sx={{
                 mt: 1,
                 mb: 2,
                 py: 1.5,
-                background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+                background: databaseStatus === 'ready' 
+                  ? 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)'
+                  : 'rgba(0, 0, 0, 0.12)',
                 '&:hover': {
-                  background: 'linear-gradient(135deg, #5a6fd8 0%, #6a4190 100%)',
+                  background: databaseStatus === 'ready'
+                    ? 'linear-gradient(135deg, #5a6fd8 0%, #6a4190 100%)'
+                    : 'rgba(0, 0, 0, 0.12)',
                 },
                 '&:disabled': {
                   background: 'rgba(0, 0, 0, 0.12)',
                 },
               }}
             >
-              {loading ? 'Creating Account...' : 'Create Account'}
+              {loading ? 'Creating Account...' : 
+               databaseStatus !== 'ready' ? 'Setup Database First' : 'Create Account'}
             </Button>
 
             <Divider sx={{ my: 2 }}>

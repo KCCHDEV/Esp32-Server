@@ -3,9 +3,96 @@ const jwt = require('jsonwebtoken');
 const { body, validationResult } = require('express-validator');
 const { dbHelpers } = require('../lib/prisma');
 const { verifyToken } = require('../middleware/auth');
+const { manualDatabaseSetup } = require('../lib/database');
 const bcrypt = require('bcryptjs');
 
 const router = express.Router();
+
+// Database setup endpoint (for first-time setup)
+router.post('/setup-database', async (req, res) => {
+  try {
+    console.log('📋 Database setup requested');
+    
+    // Check if database is already setup
+    try {
+      const userCount = await dbHelpers.user.findByEmail('admin@esp32platform.com');
+      if (userCount) {
+        return res.status(400).json({ 
+          message: 'Database is already set up',
+          setupComplete: true
+        });
+      }
+    } catch (error) {
+      // Database might not be setup yet, continue with setup
+      console.log('🔄 Database needs setup');
+    }
+    
+    // Run manual database setup
+    await manualDatabaseSetup();
+    
+    // Create admin user
+    const adminPassword = await bcrypt.hash('admin123', 12);
+    
+    try {
+      await dbHelpers.user.create({
+        username: 'admin',
+        email: 'admin@esp32platform.com',
+        password: adminPassword,
+        role: 'ADMIN',
+        subscription: 'PREMIUM',
+        emailVerified: true,
+        isActive: true
+      });
+      
+      console.log('✅ Admin user created successfully');
+    } catch (error) {
+      console.log('⚠️ Admin user might already exist');
+    }
+    
+    res.json({
+      message: 'Database setup completed successfully!',
+      adminCredentials: {
+        email: 'admin@esp32platform.com',
+        password: 'admin123',
+        note: 'Please change the admin password after first login'
+      },
+      setupComplete: true
+    });
+    
+  } catch (error) {
+    console.error('❌ Database setup failed:', error);
+    res.status(500).json({ 
+      message: 'Database setup failed',
+      error: error.message,
+      setupComplete: false
+    });
+  }
+});
+
+// Check database status
+router.get('/database-status', async (req, res) => {
+  try {
+    // Try to count users to check if database is working
+    const userCount = await dbHelpers.user.findByEmail('admin@esp32platform.com');
+    
+    res.json({
+      message: 'Database is working',
+      isSetup: !!userCount,
+      hasAdminUser: !!userCount,
+      status: 'connected'
+    });
+    
+  } catch (error) {
+    console.error('Database status check failed:', error);
+    res.status(500).json({
+      message: 'Database connection failed',
+      isSetup: false,
+      hasAdminUser: false,
+      status: 'error',
+      error: error.message
+    });
+  }
+});
 
 // Register new user
 router.post('/register', [
@@ -34,6 +121,23 @@ router.post('/register', [
     }
 
     const { username, email, password } = req.body;
+
+    // Auto-setup database if not setup yet
+    try {
+      await dbHelpers.user.findByEmail('admin@esp32platform.com');
+    } catch (error) {
+      console.log('🔄 Database not setup, attempting auto-setup...');
+      try {
+        await manualDatabaseSetup();
+        console.log('✅ Database auto-setup completed');
+      } catch (setupError) {
+        return res.status(500).json({
+          message: 'Database not setup. Please contact administrator or call /api/auth/setup-database',
+          needsSetup: true,
+          setupError: setupError.message
+        });
+      }
+    }
 
     // Check if user already exists
     const existingEmail = await dbHelpers.user.findByEmail(email);
