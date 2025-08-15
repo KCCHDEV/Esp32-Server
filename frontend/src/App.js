@@ -5,6 +5,7 @@ import { Box } from '@mui/material';
 import { useAuth } from './contexts/AuthContext';
 import Layout from './components/Layout';
 import ProtectedRoute from './components/ProtectedRoute';
+import SocketStatus from './components/SocketStatus';
 
 // Pages
 import LoginPage from './pages/LoginPage';
@@ -76,6 +77,7 @@ function App() {
       {/* 404 route */}
       <Route path="*" element={<NotFoundPage />} />
     </Routes>
+    <SocketStatus />
   );
 }
 

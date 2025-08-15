@@ -42,11 +42,17 @@
 [context.production.environment]
   NODE_ENV = "production"
   NETLIFY = "true"
+  # Disable WebSocket connections in serverless environment
+  REACT_APP_ENABLE_SOCKET = "false"
 
 [context.deploy-preview.environment]
   NODE_ENV = "development"
   NETLIFY_DEV = "true"
+  # Disable WebSocket connections in serverless environment
+  REACT_APP_ENABLE_SOCKET = "false"
 
 [context.branch-deploy.environment]
   NODE_ENV = "development"
   NETLIFY_DEV = "true"
+  # Disable WebSocket connections in serverless environment
+  REACT_APP_ENABLE_SOCKET = "false"
