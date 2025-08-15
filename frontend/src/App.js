@@ -6,6 +6,7 @@ import { useAuth } from './contexts/AuthContext';
 import Layout from './components/Layout';
 import ProtectedRoute from './components/ProtectedRoute';
 import SocketStatus from './components/SocketStatus';
+import ErrorBoundary from './components/ErrorBoundary';
 
 // Pages
 import LoginPage from './pages/LoginPage';
@@ -39,8 +40,9 @@ function App() {
   }
 
   return (
-    <>
-    <Routes>
+    <ErrorBoundary>
+      <>
+      <Routes>
       {/* Public routes */}
       <Route 
         path="/login" 
@@ -77,9 +79,10 @@ function App() {
 
       {/* 404 route */}
       <Route path="*" element={<NotFoundPage />} />
-    </Routes>
-    <SocketStatus />
-  </>
+      </Routes>
+      <SocketStatus />
+    </>
+    </ErrorBoundary>
   );
 }
 

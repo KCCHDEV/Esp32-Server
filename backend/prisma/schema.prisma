@@ -21,12 +21,24 @@ model User {
   subscriptionExpiry      DateTime?
   deviceLimit             Int       @default(3)
   projectLimit            Int       @default(5)
+  storageLimit            Int       @default(100) // MB
   isActive                Boolean   @default(true)
   lastLogin               DateTime  @default(now())
+  loginAttempts           Int       @default(0)
+  lockUntil               DateTime?
   resetPasswordToken      String?
   resetPasswordExpire     DateTime?
   emailVerified           Boolean   @default(false)
   emailVerificationToken  String?
+  emailVerificationExpire DateTime?
+  twoFactorEnabled        Boolean   @default(false)
+  twoFactorSecret         String?
+  backupCodes             String[]
+  profilePicture          String?
+  timezone                String    @default("UTC")
+  language                String    @default("en")
+  notificationSettings   Json      @default("{\"email\": true, \"push\": true}")
+  lastPasswordChange      DateTime  @default(now())
   createdAt               DateTime  @default(now())
   updatedAt               DateTime  @updatedAt
 
@@ -34,6 +46,8 @@ model User {
   devices                 Device[]
   projects                Project[]
   sharedProjects          ProjectShare[]
+  auditLogs               AuditLog[]
+  sessions                UserSession[]
 
   @@map("users")
 }
@@ -301,4 +315,96 @@ enum LogLevel {
 enum SharePermission {
   VIEW
   EDIT
+}
+
+// Audit logging for security and compliance
+model AuditLog {
+  id          String    @id @default(cuid())
+  userId      String?
+  action      String    // LOGIN, LOGOUT, CREATE_DEVICE, DELETE_PROJECT, etc.
+  resource    String?   // Resource affected (device ID, project ID, etc.)
+  details     Json?     // Additional details about the action
+  ipAddress   String?
+  userAgent   String?
+  success     Boolean   @default(true)
+  errorMessage String?
+  createdAt   DateTime  @default(now())
+
+  // Relations
+  user        User?     @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@map("audit_logs")
+  @@index([userId])
+  @@index([action])
+  @@index([createdAt])
+}
+
+// User session management
+model UserSession {
+  id          String    @id @default(cuid())
+  userId      String
+  sessionToken String   @unique
+  deviceInfo  Json?     // Browser, OS, device info
+  ipAddress   String?
+  isActive    Boolean   @default(true)
+  expiresAt   DateTime
+  createdAt   DateTime  @default(now())
+  lastUsed    DateTime  @default(now())
+
+  // Relations
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("user_sessions")
+  @@index([userId])
+  @@index([sessionToken])
+  @@index([expiresAt])
+}
+
+// System-wide settings and configuration
+model SystemSetting {
+  id          String    @id @default(cuid())
+  key         String    @unique
+  value       Json
+  description String?
+  isPublic    Boolean   @default(false) // If true, can be accessed by frontend
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  @@map("system_settings")
+}
+
+// API rate limiting and monitoring
+model ApiUsage {
+  id          String    @id @default(cuid())
+  userId      String?
+  endpoint    String
+  method      String
+  statusCode  Int
+  responseTime Int      // milliseconds
+  ipAddress   String?
+  userAgent   String?
+  createdAt   DateTime  @default(now())
+
+  @@map("api_usage")
+  @@index([userId])
+  @@index([endpoint])
+  @@index([createdAt])
+}
+
+// File storage tracking
+model FileStorage {
+  id          String    @id @default(cuid())
+  userId      String
+  filename    String
+  originalName String
+  mimeType    String
+  size        Int       // bytes
+  path        String
+  purpose     String    // PROFILE_PICTURE, PROJECT_ASSET, FIRMWARE, etc.
+  isPublic    Boolean   @default(false)
+  createdAt   DateTime  @default(now())
+
+  @@map("file_storage")
+  @@index([userId])
+  @@index([purpose])
 }

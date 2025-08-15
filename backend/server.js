@@ -18,62 +18,114 @@ const app = express();
 
 // Determine CORS origin based on environment
 const corsOrigin = process.env.NODE_ENV === 'production' 
-  ? [process.env.CORS_ORIGIN_PROD, process.env.CORS_ORIGIN]
+  ? process.env.CORS_ORIGIN || false // Must be explicitly set in production
   : process.env.CORS_ORIGIN || "http://localhost:3000";
 
-// Security middleware
+// Security middleware - Production-ready configuration
 app.use(helmet({
-  crossOriginEmbedderPolicy: false,
   contentSecurityPolicy: {
     directives: {
       defaultSrc: ["'self'"],
       styleSrc: ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com"],
       fontSrc: ["'self'", "https://fonts.gstatic.com"],
       imgSrc: ["'self'", "data:", "https:"],
-      scriptSrc: ["'self'"],
-      connectSrc: ["'self'", "ws:", "wss:"],
+      scriptSrc: ["'self'", process.env.NODE_ENV === 'development' ? "'unsafe-eval'" : null].filter(Boolean),
+      connectSrc: ["'self'", "ws:", "wss:", "https:"],
+      frameSrc: ["'none'"],
+      objectSrc: ["'none'"],
+      baseUri: ["'self'"],
+      formAction: ["'self'"],
+      frameAncestors: ["'none'"],
     },
   },
+  crossOriginEmbedderPolicy: false,
+  crossOriginOpenerPolicy: { policy: "same-origin" },
+  crossOriginResourcePolicy: { policy: "cross-origin" },
+  dnsPrefetchControl: { allow: false },
+  frameguard: { action: 'deny' },
+  hidePoweredBy: true,
+  hsts: {
+    maxAge: 31536000,
+    includeSubDomains: true,
+    preload: true
+  },
+  ieNoOpen: true,
+  noSniff: true,
+  originAgentCluster: true,
+  permittedCrossDomainPolicies: false,
+  referrerPolicy: { policy: ["no-referrer", "strict-origin-when-cross-origin"] },
+  xssFilter: true,
 }));
 
+// CORS configuration with security considerations
 app.use(cors({
-  origin: corsOrigin,
+  origin: (origin, callback) => {
+    // Allow requests with no origin (mobile apps, postman, etc.)
+    if (!origin) return callback(null, true);
+    
+    if (process.env.NODE_ENV === 'development') {
+      return callback(null, true);
+    }
+    
+    // Production: only allow specific origins
+    const allowedOrigins = Array.isArray(corsOrigin) ? corsOrigin : [corsOrigin];
+    if (allowedOrigins.includes(origin)) {
+      return callback(null, true);
+    }
+    
+    return callback(new Error('Not allowed by CORS'));
+  },
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization', 'X-API-Key'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-API-Key', 'X-Requested-With'],
+  exposedHeaders: ['X-RateLimit-Limit', 'X-RateLimit-Remaining', 'X-RateLimit-Reset'],
+  maxAge: 86400, // 24 hours
+  optionsSuccessStatus: 200
 }));
 
-// Rate limiting (more lenient for development)
-const limiter = rateLimit({
-  windowMs: parseInt(process.env.RATE_LIMIT_WINDOW_MS) || 15 * 60 * 1000, // 15 minutes
-  max: parseInt(process.env.RATE_LIMIT_MAX_REQUESTS) || 100,
+// Rate limiting - differentiated by endpoint type
+const generalLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: process.env.NODE_ENV === 'production' ? 100 : 1000,
   message: {
     error: 'Too many requests from this IP, please try again later.',
-    retryAfter: Math.ceil(parseInt(process.env.RATE_LIMIT_WINDOW_MS) / 1000 / 60),
+    retryAfter: 15,
   },
   standardHeaders: true,
   legacyHeaders: false,
-  skip: (req) => {
-    // Skip rate limiting for health checks and in development
-    return req.path === '/api/health' || process.env.NODE_ENV === 'development';
-  },
+  skip: (req) => req.path === '/api/health',
 });
 
-app.use('/api/', limiter);
+// Strict rate limiting for auth endpoints
+const authLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: process.env.NODE_ENV === 'production' ? 5 : 50, // 5 login attempts per 15 min in production
+  message: {
+    error: 'Too many authentication attempts from this IP, please try again later.',
+    retryAfter: 15,
+  },
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
+// Apply rate limiting
+app.use('/api/', generalLimiter);
+app.use('/api/auth/login', authLimiter);
+app.use('/api/auth/register', authLimiter);
 
 // Body parsing middleware
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
-// Health check endpoint (before database connection)
-app.get('/api/health', (req, res) => {
-  res.json({ 
-    status: 'OK', 
-    timestamp: new Date().toISOString(),
-    version: '1.0.0',
-    environment: process.env.NODE_ENV || 'development',
-  });
-});
+// Import monitoring middleware
+const { trackApiUsage, healthCheck, getMetrics } = require('./middleware/monitoring');
+
+// Add API usage tracking to all routes
+app.use('/api/', trackApiUsage);
+
+// Health check and metrics endpoints
+app.get('/api/health', healthCheck);
+app.get('/api/metrics', getMetrics);
 
 // Initialize server
 let server;
@@ -142,38 +194,14 @@ app.use('/api/admin', adminRoutes);
 app.use('/api/premium', premiumRoutes);
 app.use('/api/esp32', apiRoutes); // ESP32 device API endpoints
 
-// Error handling middleware
-app.use((err, req, res, next) => {
-  console.error('Error:', err);
-  
-  // Prisma-specific error handling
-  if (err.code === 'P2002') {
-    return res.status(400).json({
-      message: 'A record with this information already exists.',
-      field: err.meta?.target?.[0] || 'unknown'
-    });
-  }
-  
-  if (err.code === 'P2025') {
-    return res.status(404).json({
-      message: 'Record not found.',
-    });
-  }
+// Import error handling middleware
+const { errorHandler, notFoundHandler } = require('./middleware/errorHandler');
 
-  // Generic error response
-  res.status(err.status || 500).json({ 
-    message: err.message || 'Something went wrong!',
-    error: process.env.NODE_ENV === 'production' ? {} : err.stack
-  });
-});
+// 404 handler (must be before error handler)
+app.use('*', notFoundHandler);
 
-// 404 handler
-app.use('*', (req, res) => {
-  res.status(404).json({ 
-    message: 'Route not found',
-    path: req.originalUrl 
-  });
-});
+// Global error handling middleware (must be last)
+app.use(errorHandler);
 
 // Start server function
 async function startServer() {
