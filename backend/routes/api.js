@@ -1,7 +1,6 @@
 const express = require('express');
 const { body, validationResult } = require('express-validator');
-const Device = require('../models/Device');
-const Project = require('../models/Project');
+const { dbHelpers } = require('../lib/prisma');
 const { verifyDeviceApiKey } = require('../middleware/auth');
 
 const router = express.Router();
@@ -12,7 +11,7 @@ router.post('/heartbeat', verifyDeviceApiKey, [
   body('freeHeap').optional().isNumeric(),
   body('usedHeap').optional().isNumeric(),
   body('wifiSignal').optional().isNumeric(),
-  body('wifiConnected').optional().isBoolean()
+  body('firmwareVersion').optional().isString()
 ], async (req, res) => {
   try {
     const device = req.device;
@@ -21,199 +20,31 @@ router.post('/heartbeat', verifyDeviceApiKey, [
       freeHeap, 
       usedHeap, 
       wifiSignal, 
-      wifiConnected, 
-      chipModel, 
-      flashSize, 
-      cpuFreq,
       firmwareVersion 
     } = req.body;
 
-    // Update device status
-    device.isOnline = true;
-    device.lastSeen = new Date();
+    // Update basic device status
+    const updateData = {
+      lastSeen: new Date(),
+      isOnline: true
+    };
 
-    // Update hardware info
-    if (freeHeap !== undefined) device.hardware.freeHeap = freeHeap;
-    if (usedHeap !== undefined) device.hardware.usedHeap = usedHeap;
-    if (chipModel) device.hardware.chipModel = chipModel;
-    if (flashSize) device.hardware.flashSize = flashSize;
-    if (cpuFreq) device.hardware.cpuFreq = cpuFreq;
+    if (firmwareVersion) updateData.firmwareVersion = firmwareVersion;
+    if (uptime !== undefined) updateData.uptime = uptime;
+    if (freeHeap !== undefined) updateData.memoryUsage = freeHeap;
+    if (wifiSignal !== undefined) updateData.wifiSignal = wifiSignal;
 
-    // Update WiFi info
-    if (wifiSignal !== undefined) device.wifiConfig.signalStrength = wifiSignal;
-    if (wifiConnected !== undefined) device.wifiConfig.connected = wifiConnected;
-
-    // Update firmware version
-    if (firmwareVersion) device.firmwareVersion = firmwareVersion;
-
-    // Update uptime statistics
-    if (uptime !== undefined) device.statistics.totalUptime = uptime;
-
-    await device.save();
-
-    // Emit real-time status update
-    req.io.to(`device-${device._id}`).emit('device-status', {
-      deviceId: device._id,
-      status: device.getStatusSummary(),
-      timestamp: new Date()
-    });
+    await dbHelpers.device.update(device.id, updateData);
 
     res.json({ 
-      status: 'ok', 
+      message: 'Heartbeat received', 
       timestamp: new Date(),
-      commands: [] // Future: return pending commands
+      status: 'online'
     });
 
   } catch (error) {
     console.error('Heartbeat error:', error);
-    res.status(500).json({ message: 'Server error' });
-  }
-});
-
-// Update pin values
-router.post('/pins', verifyDeviceApiKey, [
-  body('pins').isArray().withMessage('Pins must be an array'),
-  body('pins.*.number').isInt({ min: 0, max: 50 }),
-  body('pins.*.value').exists()
-], async (req, res) => {
-  try {
-    const errors = validationResult(req);
-    if (!errors.isEmpty()) {
-      return res.status(400).json({ 
-        message: 'Validation error', 
-        errors: errors.array() 
-      });
-    }
-
-    const device = req.device;
-    const { pins } = req.body;
-
-    // Update pin values
-    pins.forEach(pinUpdate => {
-      const existingPin = device.pins.find(p => p.number === pinUpdate.number);
-      if (existingPin) {
-        existingPin.value = pinUpdate.value;
-      }
-    });
-
-    await device.save();
-
-    // Emit real-time pin updates
-    req.io.to(`device-${device._id}`).emit('pins-data', {
-      deviceId: device._id,
-      pins: pins,
-      timestamp: new Date()
-    });
-
-    res.json({ status: 'ok', updated: pins.length });
-
-  } catch (error) {
-    console.error('Pin update error:', error);
-    res.status(500).json({ message: 'Server error' });
-  }
-});
-
-// Update sensor readings
-router.post('/sensors', verifyDeviceApiKey, [
-  body('sensors').isArray().withMessage('Sensors must be an array'),
-  body('sensors.*.type').notEmpty(),
-  body('sensors.*.value').exists()
-], async (req, res) => {
-  try {
-    const errors = validationResult(req);
-    if (!errors.isEmpty()) {
-      return res.status(400).json({ 
-        message: 'Validation error', 
-        errors: errors.array() 
-      });
-    }
-
-    const device = req.device;
-    const { sensors } = req.body;
-
-    // Update sensor readings
-    sensors.forEach(sensorData => {
-      const existingSensor = device.sensors.find(s => 
-        s.type === sensorData.type && s.pin === sensorData.pin
-      );
-      
-      if (existingSensor) {
-        existingSensor.value = sensorData.value;
-        existingSensor.lastRead = new Date();
-      } else {
-        device.sensors.push({
-          type: sensorData.type,
-          pin: sensorData.pin,
-          name: sensorData.name || sensorData.type,
-          value: sensorData.value,
-          unit: sensorData.unit,
-          lastRead: new Date()
-        });
-      }
-    });
-
-    await device.save();
-
-    // Emit real-time sensor data
-    req.io.to(`device-${device._id}`).emit('sensor-data', {
-      deviceId: device._id,
-      sensors: sensors,
-      timestamp: new Date()
-    });
-
-    res.json({ status: 'ok', updated: sensors.length });
-
-  } catch (error) {
-    console.error('Sensor update error:', error);
-    res.status(500).json({ message: 'Server error' });
-  }
-});
-
-// Report I2C scan results
-router.post('/i2c-scan', verifyDeviceApiKey, [
-  body('devices').isArray().withMessage('Devices must be an array'),
-  body('devices.*.address').notEmpty()
-], async (req, res) => {
-  try {
-    const errors = validationResult(req);
-    if (!errors.isEmpty()) {
-      return res.status(400).json({ 
-        message: 'Validation error', 
-        errors: errors.array() 
-      });
-    }
-
-    const device = req.device;
-    const { devices } = req.body;
-
-    // Update I2C devices
-    device.i2cDevices = devices.map(i2cDevice => ({
-      address: i2cDevice.address,
-      name: i2cDevice.name || `Device@${i2cDevice.address}`,
-      type: i2cDevice.type || 'Unknown',
-      isConnected: true,
-      lastRead: new Date(),
-      data: i2cDevice.data || {}
-    }));
-
-    await device.save();
-
-    // Emit I2C scan results
-    req.io.to(`device-${device._id}`).emit('i2c-scan-results', {
-      deviceId: device._id,
-      devices: device.i2cDevices,
-      timestamp: new Date()
-    });
-
-    res.json({ 
-      status: 'ok', 
-      message: 'I2C scan results updated',
-      deviceCount: devices.length 
-    });
-
-  } catch (error) {
-    console.error('I2C scan error:', error);
-    res.status(500).json({ message: 'Server error' });
+    res.status(500).json({ message: 'Internal server error' });
   }
 });
 
@@ -222,212 +53,187 @@ router.get('/config', verifyDeviceApiKey, async (req, res) => {
   try {
     const device = req.device;
 
-    // Get active project for the device
-    const activeProject = await Project.findOne({
-      deviceId: device._id,
-      isActive: true,
-      'deployment.isDeployed': true
-    });
-
-    const config = {
-      deviceId: device.deviceId,
-      name: device.name,
-      pins: device.pins,
-      activeProject: activeProject ? {
-        id: activeProject._id,
-        name: activeProject.name,
-        version: activeProject.deployment.version,
-        canvas: activeProject.canvas
-      } : null,
-      settings: {
-        reportInterval: 30000, // 30 seconds
-        enableDeepSleep: false,
-        wifiTimeout: 30000
+    res.json({
+      message: 'Device configuration',
+      config: {
+        deviceId: device.deviceId,
+        name: device.name,
+        firmwareVersion: device.firmwareVersion,
+        updateInterval: 30000, // 30 seconds
+        sensors: device.sensors || [],
+        settings: {
+          wifiReconnectDelay: 5000,
+          maxRetries: 3
+        }
       }
-    };
-
-    res.json(config);
+    });
 
   } catch (error) {
     console.error('Get config error:', error);
-    res.status(500).json({ message: 'Server error' });
+    res.status(500).json({ message: 'Internal server error' });
   }
 });
 
-// Report WiFi networks scan
-router.post('/wifi-scan', verifyDeviceApiKey, [
-  body('networks').isArray().withMessage('Networks must be an array')
+// Send sensor data
+router.post('/sensor-data', verifyDeviceApiKey, [
+  body('sensorId').notEmpty().withMessage('Sensor ID is required'),
+  body('value').isNumeric().withMessage('Value must be numeric'),
+  body('unit').optional().isString(),
+  body('timestamp').optional().isISO8601()
 ], async (req, res) => {
   try {
-    const device = req.device;
-    const { networks } = req.body;
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+      return res.status(400).json({ 
+        message: 'Validation error', 
+        errors: errors.array() 
+      });
+    }
 
-    // Emit WiFi scan results to frontend
-    req.io.to(`device-${device._id}`).emit('wifi-scan-results', {
-      deviceId: device._id,
-      networks: networks,
-      timestamp: new Date()
-    });
+    const device = req.device;
+    const { sensorId, value, unit, timestamp } = req.body;
+
+    // In a real implementation, you would save sensor data
+    // For now, just acknowledge receipt
+    console.log(`Sensor data from ${device.name}: ${sensorId} = ${value} ${unit || ''}`);
 
     res.json({ 
-      status: 'ok', 
-      message: 'WiFi scan results received',
-      networkCount: networks.length 
+      message: 'Sensor data received',
+      sensorId,
+      value,
+      timestamp: timestamp || new Date()
     });
 
   } catch (error) {
-    console.error('WiFi scan error:', error);
-    res.status(500).json({ message: 'Server error' });
+    console.error('Sensor data error:', error);
+    res.status(500).json({ message: 'Internal server error' });
   }
 });
 
-// Update WiFi connection status
-router.post('/wifi-status', verifyDeviceApiKey, [
-  body('connected').isBoolean(),
-  body('ssid').optional().isString(),
-  body('ip').optional().isString(),
-  body('signal').optional().isNumeric()
-], async (req, res) => {
-  try {
-    const device = req.device;
-    const { connected, ssid, ip, signal } = req.body;
-
-    // Update WiFi configuration
-    device.wifiConfig.connected = connected;
-    if (ssid) device.wifiConfig.ssid = ssid;
-    if (ip) device.wifiConfig.ipAddress = ip;
-    if (signal !== undefined) device.wifiConfig.signalStrength = signal;
-
-    await device.save();
-
-    // Emit WiFi status update
-    req.io.to(`device-${device._id}`).emit('wifi-status', {
-      deviceId: device._id,
-      wifiConfig: device.wifiConfig,
-      timestamp: new Date()
-    });
-
-    res.json({ status: 'ok' });
-
-  } catch (error) {
-    console.error('WiFi status error:', error);
-    res.status(500).json({ message: 'Server error' });
-  }
-});
-
-// Log messages from device
-router.post('/logs', verifyDeviceApiKey, [
-  body('level').isIn(['debug', 'info', 'warn', 'error']),
-  body('message').notEmpty(),
-  body('component').optional().isString()
-], async (req, res) => {
-  try {
-    const device = req.device;
-    const { level, message, component } = req.body;
-
-    const logEntry = {
-      timestamp: new Date(),
-      level,
-      message,
-      component: component || 'system',
-      deviceId: device._id
-    };
-
-    // Emit log to frontend
-    req.io.to(`device-${device._id}`).emit('device-log', logEntry);
-
-    // In production, you would store logs in a separate collection or logging system
-    console.log(`[${device.name}] ${level.toUpperCase()}: ${message}`);
-
-    res.json({ status: 'ok' });
-
-  } catch (error) {
-    console.error('Log error:', error);
-    res.status(500).json({ message: 'Server error' });
-  }
-});
-
-// Get pending commands for device
+// Get device commands (for remote control)
 router.get('/commands', verifyDeviceApiKey, async (req, res) => {
   try {
     const device = req.device;
 
-    // In a real implementation, you would fetch pending commands from a queue
-    // For now, return empty array
-    const commands = [];
-
-    res.json({ commands });
-
-  } catch (error) {
-    console.error('Get commands error:', error);
-    res.status(500).json({ message: 'Server error' });
-  }
-});
-
-// Firmware update endpoint
-router.post('/firmware-info', verifyDeviceApiKey, [
-  body('version').notEmpty(),
-  body('buildDate').optional().isString(),
-  body('features').optional().isArray()
-], async (req, res) => {
-  try {
-    const device = req.device;
-    const { version, buildDate, features } = req.body;
-
-    device.firmwareVersion = version;
-    await device.save();
-
-    // Check if there's a newer firmware version available
-    const latestVersion = '1.0.0'; // In production, fetch from a firmware repository
-    const updateAvailable = version !== latestVersion;
-
-    res.json({ 
-      status: 'ok',
-      currentVersion: version,
-      latestVersion,
-      updateAvailable,
-      updateUrl: updateAvailable ? `/api/firmware/download/${latestVersion}` : null
+    // In a real implementation, you would fetch pending commands from database
+    // For now, return empty commands
+    res.json({
+      message: 'Device commands',
+      commands: [],
+      timestamp: new Date()
     });
 
   } catch (error) {
-    console.error('Firmware info error:', error);
-    res.status(500).json({ message: 'Server error' });
+    console.error('Get commands error:', error);
+    res.status(500).json({ message: 'Internal server error' });
   }
 });
 
-// Error reporting
-router.post('/error', verifyDeviceApiKey, [
-  body('error').notEmpty(),
-  body('stackTrace').optional(),
-  body('component').optional()
+// Update device status
+router.post('/status', verifyDeviceApiKey, [
+  body('status').isIn(['online', 'offline', 'error']).withMessage('Invalid status'),
+  body('message').optional().isString()
 ], async (req, res) => {
   try {
-    const device = req.device;
-    const { error, stackTrace, component } = req.body;
-
-    const errorReport = {
-      timestamp: new Date(),
-      error,
-      stackTrace,
-      component: component || 'unknown',
-      deviceId: device._id,
-      deviceName: device.name
-    };
-
-    // Emit error to frontend
-    req.io.to(`device-${device._id}`).emit('device-error', errorReport);
-
-    // Log error
-    console.error(`[${device.name}] ERROR in ${component}: ${error}`);
-    if (stackTrace) {
-      console.error(`Stack trace: ${stackTrace}`);
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+      return res.status(400).json({ 
+        message: 'Validation error', 
+        errors: errors.array() 
+      });
     }
 
-    res.json({ status: 'ok', message: 'Error report received' });
+    const device = req.device;
+    const { status, message } = req.body;
+
+    const updateData = {
+      isOnline: status === 'online',
+      lastSeen: new Date()
+    };
+
+    if (message) updateData.statusMessage = message;
+
+    await dbHelpers.device.update(device.id, updateData);
+
+    res.json({ 
+      message: 'Status updated',
+      status,
+      timestamp: new Date()
+    });
 
   } catch (error) {
-    console.error('Error report error:', error);
-    res.status(500).json({ message: 'Server error' });
+    console.error('Update status error:', error);
+    res.status(500).json({ message: 'Internal server error' });
+  }
+});
+
+// Device log endpoint
+router.post('/logs', verifyDeviceApiKey, [
+  body('level').isIn(['debug', 'info', 'warn', 'error']).withMessage('Invalid log level'),
+  body('message').notEmpty().withMessage('Log message is required'),
+  body('timestamp').optional().isISO8601()
+], async (req, res) => {
+  try {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+      return res.status(400).json({ 
+        message: 'Validation error', 
+        errors: errors.array() 
+      });
+    }
+
+    const device = req.device;
+    const { level, message, timestamp } = req.body;
+
+    // Log to console for now (in production, save to database)
+    console.log(`[${device.name}] ${level.toUpperCase()}: ${message}`);
+
+    res.json({ 
+      message: 'Log received',
+      timestamp: timestamp || new Date()
+    });
+
+  } catch (error) {
+    console.error('Log error:', error);
+    res.status(500).json({ message: 'Internal server error' });
+  }
+});
+
+// Get device time (for synchronization)
+router.get('/time', verifyDeviceApiKey, (req, res) => {
+  try {
+    const now = new Date();
+    res.json({
+      message: 'Current server time',
+      timestamp: now.toISOString(),
+      unix: Math.floor(now.getTime() / 1000),
+      timezone: 'UTC'
+    });
+
+  } catch (error) {
+    console.error('Get time error:', error);
+    res.status(500).json({ message: 'Internal server error' });
+  }
+});
+
+// Firmware update check
+router.get('/firmware/check', verifyDeviceApiKey, async (req, res) => {
+  try {
+    const device = req.device;
+    const currentVersion = device.firmwareVersion || '1.0.0';
+
+    // In a real implementation, check for firmware updates
+    res.json({
+      message: 'Firmware update check',
+      currentVersion,
+      latestVersion: '1.0.0',
+      updateAvailable: false,
+      updateUrl: null
+    });
+
+  } catch (error) {
+    console.error('Firmware check error:', error);
+    res.status(500).json({ message: 'Internal server error' });
   }
 });
 
