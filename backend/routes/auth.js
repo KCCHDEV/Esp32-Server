@@ -1,10 +1,98 @@
 const express = require('express');
 const jwt = require('jsonwebtoken');
 const { body, validationResult } = require('express-validator');
-const User = require('../models/User');
+const { dbHelpers } = require('../lib/prisma');
 const { verifyToken } = require('../middleware/auth');
+const { manualDatabaseSetup } = require('../lib/database');
+const bcrypt = require('bcryptjs');
 
 const router = express.Router();
+
+// Database setup endpoint (for first-time setup)
+router.post('/setup-database', async (req, res) => {
+  try {
+    console.log('📋 Database setup requested');
+    
+    // Check if database is already setup
+    try {
+      const userCount = await dbHelpers.user.findByEmail('admin@esp32platform.com');
+      if (userCount) {
+        return res.status(400).json({ 
+          message: 'Database is already set up',
+          setupComplete: true
+        });
+      }
+    } catch (error) {
+      // Database might not be setup yet, continue with setup
+      console.log('🔄 Database needs setup');
+    }
+    
+    // Run manual database setup
+    await manualDatabaseSetup();
+    
+    // Create admin user
+    const adminPassword = await bcrypt.hash('admin123', 12);
+    
+    try {
+      await dbHelpers.user.create({
+        username: 'admin',
+        email: 'admin@esp32platform.com',
+        password: adminPassword,
+        role: 'ADMIN',
+        subscription: 'PREMIUM',
+        emailVerified: true,
+        isActive: true
+      });
+      
+      console.log('✅ Admin user created successfully');
+    } catch (error) {
+      console.log('⚠️ Admin user might already exist');
+    }
+    
+    res.json({
+      message: 'Database setup completed successfully!',
+      adminCredentials: {
+        email: 'admin@esp32platform.com',
+        password: 'admin123',
+        note: 'Please change the admin password after first login'
+      },
+      setupComplete: true
+    });
+    
+  } catch (error) {
+    console.error('❌ Database setup failed:', error);
+    res.status(500).json({ 
+      message: 'Database setup failed',
+      error: error.message,
+      setupComplete: false
+    });
+  }
+});
+
+// Check database status
+router.get('/database-status', async (req, res) => {
+  try {
+    // Try to count users to check if database is working
+    const userCount = await dbHelpers.user.findByEmail('admin@esp32platform.com');
+    
+    res.json({
+      message: 'Database is working',
+      isSetup: !!userCount,
+      hasAdminUser: !!userCount,
+      status: 'connected'
+    });
+    
+  } catch (error) {
+    console.error('Database status check failed:', error);
+    res.status(500).json({
+      message: 'Database connection failed',
+      isSetup: false,
+      hasAdminUser: false,
+      status: 'error',
+      error: error.message
+    });
+  }
+});
 
 // Register new user
 router.post('/register', [
@@ -34,21 +122,51 @@ router.post('/register', [
 
     const { username, email, password } = req.body;
 
-    // Check if user already exists
-    const existingUser = await User.findByEmailOrUsername(email);
-    const existingUsername = await User.findByUsername(username);
+    // Auto-setup database if not setup yet
+    try {
+      await dbHelpers.user.findByEmail('admin@esp32platform.com');
+    } catch (error) {
+      console.log('🔄 Database not setup, attempting auto-setup...');
+      try {
+        await manualDatabaseSetup();
+        console.log('✅ Database auto-setup completed');
+      } catch (setupError) {
+        return res.status(500).json({
+          message: 'Database not setup. Please contact administrator or call /api/auth/setup-database',
+          needsSetup: true,
+          setupError: setupError.message
+        });
+      }
+    }
 
-    if (existingUser || existingUsername) {
+    // Check if user already exists
+    const existingEmail = await dbHelpers.user.findByEmail(email);
+    const existingUsername = await dbHelpers.user.findByUsername(username);
+
+    if (existingEmail) {
       return res.status(400).json({ 
-        message: 'User already exists with this email or username' 
+        message: 'User already exists with this email' 
       });
     }
 
+    if (existingUsername) {
+      return res.status(400).json({ 
+        message: 'Username is already taken' 
+      });
+    }
+
+    // Hash password
+    const hashedPassword = await bcrypt.hash(password, 12);
+
     // Create new user
-    const user = await User.create({
+    const user = await dbHelpers.user.create({
       username,
       email,
-      password
+      password: hashedPassword,
+      role: 'USER',
+      subscription: 'FREE',
+      isActive: true,
+      emailVerified: false
     });
 
     // Generate JWT token
@@ -66,20 +184,20 @@ router.post('/register', [
         username: user.username,
         email: user.email,
         role: user.role,
-        subscription: user.subscription,
-        limits: User.getEffectiveLimits(user)
+        subscription: user.subscription
       }
     });
 
   } catch (error) {
     console.error('Registration error:', error);
-    res.status(500).json({ message: 'Server error during registration' });
+    res.status(500).json({ message: 'Internal server error' });
   }
 });
 
 // Login user
 router.post('/login', [
   body('login')
+    .trim()
     .notEmpty()
     .withMessage('Email or username is required'),
   body('password')
@@ -99,24 +217,28 @@ router.post('/login', [
     const { login, password } = req.body;
 
     // Find user by email or username
-    const user = await User.findByEmailOrUsername(login);
+    let user = await dbHelpers.user.findByEmail(login);
+    if (!user) {
+      user = await dbHelpers.user.findByUsername(login);
+    }
 
     if (!user) {
       return res.status(401).json({ message: 'Invalid credentials' });
     }
 
+    // Check if user is active
     if (!user.isActive) {
       return res.status(401).json({ message: 'Account is deactivated' });
     }
 
-    // Check password
-    const isPasswordValid = await User.comparePassword(password, user.password);
+    // Verify password
+    const isPasswordValid = await bcrypt.compare(password, user.password);
     if (!isPasswordValid) {
       return res.status(401).json({ message: 'Invalid credentials' });
     }
 
     // Update last login
-    await User.updateLastLogin(user.id);
+    await dbHelpers.user.update(user.id, { lastLogin: new Date() });
 
     // Generate JWT token
     const token = jwt.sign(
@@ -133,28 +255,27 @@ router.post('/login', [
         username: user.username,
         email: user.email,
         role: user.role,
-        subscription: user.subscription,
-        limits: User.getEffectiveLimits(user),
-        lastLogin: new Date()
+        subscription: user.subscription
       }
     });
 
   } catch (error) {
     console.error('Login error:', error);
-    res.status(500).json({ message: 'Server error during login' });
+    res.status(500).json({ message: 'Internal server error' });
   }
 });
 
 // Get current user profile
-router.get('/profile', verifyToken, async (req, res) => {
+router.get('/me', verifyToken, async (req, res) => {
   try {
-    const user = await User.findById(req.user.id);
+    const user = await dbHelpers.user.findById(req.user.id);
     
     if (!user) {
       return res.status(404).json({ message: 'User not found' });
     }
 
     res.json({
+      message: 'User profile retrieved successfully',
       user: {
         id: user.id,
         username: user.username,
@@ -162,28 +283,29 @@ router.get('/profile', verifyToken, async (req, res) => {
         role: user.role,
         subscription: user.subscription,
         subscriptionExpiry: user.subscriptionExpiry,
-        limits: User.getEffectiveLimits(user),
+        deviceLimit: user.deviceLimit,
+        projectLimit: user.projectLimit,
         isActive: user.isActive,
+        emailVerified: user.emailVerified,
         lastLogin: user.lastLogin,
         createdAt: user.createdAt
       }
     });
 
   } catch (error) {
-    console.error('Profile error:', error);
-    res.status(500).json({ message: 'Server error' });
+    console.error('Get profile error:', error);
+    res.status(500).json({ message: 'Internal server error' });
   }
 });
 
 // Update user profile
-router.put('/profile', verifyToken, [
+router.put('/profile', [
+  verifyToken,
   body('username')
     .optional()
     .trim()
     .isLength({ min: 3, max: 30 })
-    .withMessage('Username must be between 3 and 30 characters')
-    .matches(/^[a-zA-Z0-9_]+$/)
-    .withMessage('Username can only contain letters, numbers, and underscores'),
+    .withMessage('Username must be between 3 and 30 characters'),
   body('email')
     .optional()
     .isEmail()
@@ -191,7 +313,6 @@ router.put('/profile', verifyToken, [
     .withMessage('Please provide a valid email')
 ], async (req, res) => {
   try {
-    // Check validation errors
     const errors = validationResult(req);
     if (!errors.isEmpty()) {
       return res.status(400).json({ 
@@ -201,32 +322,33 @@ router.put('/profile', verifyToken, [
     }
 
     const { username, email } = req.body;
-    const user = await User.findById(req.user.id);
-
-    if (!user) {
-      return res.status(404).json({ message: 'User not found' });
-    }
-
     const updateData = {};
 
-    // Check for duplicate username/email
-    if (username && username !== user.username) {
-      const existingUser = await User.findByUsername(username);
-      if (existingUser) {
-        return res.status(400).json({ message: 'Username already taken' });
+    // Check if username is being updated and not taken
+    if (username && username !== req.user.username) {
+      const existingUsername = await dbHelpers.user.findByUsername(username);
+      if (existingUsername) {
+        return res.status(400).json({ message: 'Username is already taken' });
       }
       updateData.username = username;
     }
 
-    if (email && email !== user.email) {
-      const existingUser = await User.findByEmail(email);
-      if (existingUser) {
-        return res.status(400).json({ message: 'Email already taken' });
+    // Check if email is being updated and not taken
+    if (email && email !== req.user.email) {
+      const existingEmail = await dbHelpers.user.findByEmail(email);
+      if (existingEmail) {
+        return res.status(400).json({ message: 'Email is already taken' });
       }
       updateData.email = email;
+      updateData.emailVerified = false; // Reset email verification
     }
 
-    const updatedUser = await User.update(user.id, updateData);
+    if (Object.keys(updateData).length === 0) {
+      return res.status(400).json({ message: 'No changes provided' });
+    }
+
+    // Update user
+    const updatedUser = await dbHelpers.user.update(req.user.id, updateData);
 
     res.json({
       message: 'Profile updated successfully',
@@ -235,19 +357,19 @@ router.put('/profile', verifyToken, [
         username: updatedUser.username,
         email: updatedUser.email,
         role: updatedUser.role,
-        subscription: updatedUser.subscription,
-        limits: User.getEffectiveLimits(updatedUser)
+        subscription: updatedUser.subscription
       }
     });
 
   } catch (error) {
-    console.error('Profile update error:', error);
-    res.status(500).json({ message: 'Server error' });
+    console.error('Update profile error:', error);
+    res.status(500).json({ message: 'Internal server error' });
   }
 });
 
 // Change password
-router.put('/change-password', verifyToken, [
+router.put('/password', [
+  verifyToken,
   body('currentPassword')
     .notEmpty()
     .withMessage('Current password is required'),
@@ -256,7 +378,6 @@ router.put('/change-password', verifyToken, [
     .withMessage('New password must be at least 6 characters long')
 ], async (req, res) => {
   try {
-    // Check validation errors
     const errors = validationResult(req);
     if (!errors.isEmpty()) {
       return res.status(400).json({ 
@@ -266,46 +387,33 @@ router.put('/change-password', verifyToken, [
     }
 
     const { currentPassword, newPassword } = req.body;
-    const user = await User.findById(req.user.id);
 
-    if (!user) {
-      return res.status(404).json({ message: 'User not found' });
-    }
-
+    // Get user with password
+    const user = await dbHelpers.user.findById(req.user.id);
+    
     // Verify current password
-    const isCurrentPasswordValid = await User.comparePassword(currentPassword, user.password);
+    const isCurrentPasswordValid = await bcrypt.compare(currentPassword, user.password);
     if (!isCurrentPasswordValid) {
       return res.status(400).json({ message: 'Current password is incorrect' });
     }
 
+    // Hash new password
+    const hashedNewPassword = await bcrypt.hash(newPassword, 12);
+
     // Update password
-    await User.updatePassword(user.id, newPassword);
+    await dbHelpers.user.update(req.user.id, { password: hashedNewPassword });
 
     res.json({ message: 'Password changed successfully' });
 
   } catch (error) {
-    console.error('Password change error:', error);
-    res.status(500).json({ message: 'Server error' });
+    console.error('Change password error:', error);
+    res.status(500).json({ message: 'Internal server error' });
   }
 });
 
-// Verify token endpoint
-router.get('/verify', verifyToken, (req, res) => {
-  res.json({ 
-    valid: true, 
-    user: {
-      id: req.user.id,
-      username: req.user.username,
-      email: req.user.email,
-      role: req.user.role,
-      subscription: req.user.subscription
-    }
-  });
-});
-
-// Logout (client-side implementation)
-router.post('/logout', (req, res) => {
-  res.json({ message: 'Logged out successfully' });
+// Logout (client-side token removal)
+router.post('/logout', verifyToken, (req, res) => {
+  res.json({ message: 'Logout successful' });
 });
 
 module.exports = router;
