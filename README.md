@@ -56,34 +56,36 @@ A comprehensive zero-code platform for ESP32 development similar to Blink, featu
 └─────────────────┘    └─────────────────┘    └─────────────────┘
 ```
 
-## 🚀 Quick Deploy (Recommended)
+## 🚀 ตั้งค่าง่ายๆ แค่ 3 ขั้นตอน!
 
-### 1. One-Click Deploy to Netlify
+### 1. สร้าง Database (ฟรี!)
+- ไปที่ [neon.tech](https://neon.tech) 
+- สร้าง project และคัดลอก Database URL
 
-[![Deploy to Netlify](https://www.netlify.com/img/deploy/button.svg)](https://app.netlify.com/start/deploy?repository=https://github.com/your-repo/esp32-zero-code-platform)
-
-### 2. Set Up Neon Database
-1. Create free account at [neon.tech](https://neon.tech)
-2. Create a new PostgreSQL database
-3. Copy the connection string
-
-### 3. Configure Environment Variables
-In Netlify dashboard, add these environment variables:
-
+### 2. ตั้งค่า Environment
 ```bash
-DATABASE_URL=postgresql://username:password@ep-example.us-east-1.aws.neon.tech/neondb?sslmode=require
-DIRECT_URL=postgresql://username:password@ep-example.us-east-1.aws.neon.tech/neondb?sslmode=require
-JWT_SECRET=your_super_secret_jwt_key_minimum_32_characters_long
-NODE_ENV=production
-NETLIFY=true
+# สร้างไฟล์ backend/.env
+DATABASE_URL="postgresql://user:pass@your-neon-url/db?sslmode=require"
+JWT_SECRET="your-secret-key"
 ```
 
-### 4. Deploy!
-- Your platform will be live at `https://your-app-name.netlify.app`
-- Database schema is automatically created
-- Admin account is seeded with demo data
+### 3. เริ่มใช้งาน
+```bash
+# ติดตั้ง dependencies
+cd backend && npm install
+cd ../frontend && npm install
 
-**🎉 That's it! Your ESP32 platform is now live!**
+# รันเซิร์ฟเวอร์
+cd backend && npm start    # Terminal 1
+cd frontend && npm start   # Terminal 2
+```
+
+**🎉 เปิด http://localhost:3000 เท่านี้เอง!**
+
+### 📖 รายละเอียดเพิ่มเติม
+ดูใน [SETUP.md](./SETUP.md) สำหรับขั้นตอนละเอียดและการ deploy
+
+[![Deploy to Netlify](https://www.netlify.com/img/deploy/button.svg)](https://app.netlify.com/start/deploy?repository=https://github.com/your-repo/esp32-zero-code-platform)
 
 ## 💻 Local Development
 
