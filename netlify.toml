@@ -5,6 +5,10 @@
 [build.environment]
   NODE_VERSION = "18"
 
+# Auto-install dependencies for Netlify Functions
+[[plugins]]
+  package = "@netlify/plugin-functions-install-core"
+
 # Redirect all API calls to serverless functions
 [[redirects]]
   from = "/api/*"

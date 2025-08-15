@@ -59,8 +59,16 @@ async function netlifyBuild() {
     }
     
     console.log('📦 Step 1: Installing dependencies...');
+    
+    // Install project dependencies
     await runCommand('npm', ['run', 'install']);
-    console.log('✅ Dependencies installed');
+    console.log('✅ Project dependencies installed');
+    
+    // Install Netlify Functions dependencies
+    await runCommand('npm', ['install'], {
+      cwd: './netlify/functions'
+    });
+    console.log('✅ Netlify Functions dependencies installed');
     
     console.log('🔧 Step 2: Generating Prisma Client...');
     await runCommand('npx', ['prisma', 'generate'], {
