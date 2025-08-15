@@ -1,0 +1,19 @@
+{
+  "name": "esp32-zero-code-platform",
+  "version": "1.0.0",
+  "description": "Zero-code platform for ESP32 development with visual programming interface",
+  "main": "index.js",
+  "scripts": {
+    "dev": "concurrently \"npm run server\" \"npm run client\"",
+    "server": "cd backend && npm run dev",
+    "client": "cd frontend && npm run dev",
+    "install-all": "npm install && cd backend && npm install && cd ../frontend && npm install",
+    "build": "cd frontend && npm run build && cd ../backend && npm run build"
+  },
+  "keywords": ["esp32", "iot", "zero-code", "visual-programming", "arduino"],
+  "author": "ESP32 Zero Code Platform",
+  "license": "MIT",
+  "devDependencies": {
+    "concurrently": "^8.2.2"
+  }
+}
