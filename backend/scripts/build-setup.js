@@ -13,6 +13,7 @@
 
 const { PrismaClient } = require('@prisma/client');
 const bcrypt = require('bcryptjs');
+const { spawn } = require('child_process');
 
 console.log('🏗️  Build-time Database Setup Starting...');
 console.log('===============================================');
@@ -48,15 +49,28 @@ if (!databaseUrl) {
 console.log('📍 Database URL found, proceeding with setup...');
 console.log(`🔗 URL: ${databaseUrl.replace(/:[^:@]*@/, ':***@')}`);
 
-const prisma = new PrismaClient({
-  datasourceUrl: databaseUrl,
-  log: process.env.NODE_ENV === 'development' ? ['error'] : []
-});
+let prisma;
 
 async function buildTimeSetup() {
   const startTime = Date.now();
   
   try {
+    // Generate Prisma Client first (required for Netlify)
+    console.log('🔄 Generating Prisma Client for Netlify...');
+    try {
+      await generatePrismaClient();
+      console.log('✅ Prisma Client generated successfully');
+    } catch (generateError) {
+      console.log('⚠️  Prisma Client generation failed, continuing with existing client...');
+      console.log('   Error:', generateError.message);
+    }
+
+    // Initialize Prisma Client after generation
+    prisma = new PrismaClient({
+      datasourceUrl: databaseUrl,
+      log: process.env.NODE_ENV === 'development' ? ['error'] : []
+    });
+    
     console.log('🔄 Testing database connection...');
     
     // Test connection with timeout (30 seconds for Netlify builds)
@@ -124,9 +138,11 @@ async function buildTimeSetup() {
       logSetupComplete(startTime, 'failed');
       process.exit(1);
     }
-  } finally {
-    await prisma.$disconnect();
-  }
+      } finally {
+      if (prisma) {
+        await prisma.$disconnect();
+      }
+    }
 }
 
 async function setupDatabaseWithPrisma() {
@@ -389,6 +405,42 @@ function logSetupComplete(startTime, status) {
   console.log('===============================================');
   console.log(`⏱️  Database setup completed in ${duration}s (${status})`);
   console.log('===============================================');
+}
+
+function generatePrismaClient() {
+  return new Promise((resolve, reject) => {
+    console.log('🔧 Running: npx prisma generate');
+    
+    const env = { 
+      ...process.env,
+      DATABASE_URL: databaseUrl,
+      NETLIFY_DATABASE_URL: databaseUrl
+    };
+    
+    const generate = spawn('npx', ['prisma', 'generate'], {
+      cwd: __dirname + '/..',
+      env,
+      stdio: 'inherit'
+    });
+    
+    generate.on('close', (code) => {
+      if (code === 0) {
+        resolve();
+      } else {
+        reject(new Error(`Prisma generate failed with code ${code}`));
+      }
+    });
+    
+    generate.on('error', (error) => {
+      reject(error);
+    });
+    
+    // Timeout after 60 seconds
+    setTimeout(() => {
+      generate.kill();
+      reject(new Error('Prisma generate timeout'));
+    }, 60000);
+  });
 }
 
 // Run setup
