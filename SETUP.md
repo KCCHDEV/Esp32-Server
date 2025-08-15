@@ -34,8 +34,7 @@ node -e "console.log(require('crypto').randomBytes(32).toString('base64'))"
 # ติดตั้ง dependencies ทั้งหมด
 npm run install
 
-# ทดสอบว่า environment variables ครบหรือไม่
-npm run test:env
+
 
 # ตั้งค่า database
 npm run db:setup

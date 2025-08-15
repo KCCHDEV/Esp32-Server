@@ -37,8 +37,29 @@ async function netlifyBuild() {
   const startTime = Date.now();
   
   try {
+    // Check environment variables
+    console.log('🔍 Checking environment variables...');
+    const requiredEnvs = ['JWT_SECRET', 'JWT_EXPIRE', 'NETLIFY_DATABASE_URL', 'NETLIFY_DATABASE_URL_UNPOOLED'];
+    let missingEnvs = [];
+    
+    requiredEnvs.forEach(env => {
+      if (!process.env[env]) {
+        missingEnvs.push(env);
+      } else {
+        console.log(`✅ ${env}: ${env.includes('SECRET') ? '[HIDDEN]' : 'SET'}`);
+      }
+    });
+    
+    if (missingEnvs.length > 0) {
+      console.log('❌ Missing environment variables:');
+      missingEnvs.forEach(env => console.log(`   - ${env}`));
+      console.log('⚠️  Build will continue but may fail...');
+    } else {
+      console.log('✅ All environment variables are set');
+    }
+    
     console.log('📦 Step 1: Installing dependencies...');
-    await runCommand('npm', ['run', 'install-all']);
+    await runCommand('npm', ['run', 'install']);
     console.log('✅ Dependencies installed');
     
     console.log('🔧 Step 2: Generating Prisma Client...');
@@ -46,15 +67,18 @@ async function netlifyBuild() {
       cwd: './backend',
       env: {
         ...process.env,
-        // Ensure DATABASE_URL is available for Prisma
-        DATABASE_URL: process.env.NETLIFY_DATABASE_URL || process.env.DATABASE_URL
+        // Ensure NETLIFY_DATABASE_URL is available for Prisma
+        NETLIFY_DATABASE_URL: process.env.NETLIFY_DATABASE_URL,
+        NETLIFY_DATABASE_URL_UNPOOLED: process.env.NETLIFY_DATABASE_URL_UNPOOLED
       }
     });
     console.log('✅ Prisma Client generated');
     
-    console.log('🏗️  Step 3: Building application...');
-    await runCommand('npm', ['run', 'build']);
-    console.log('✅ Application built');
+    console.log('🏗️  Step 3: Building frontend...');
+    await runCommand('npm', ['run', 'build'], {
+      cwd: './frontend'
+    });
+    console.log('✅ Frontend built');
     
     const duration = ((Date.now() - startTime) / 1000).toFixed(2);
     console.log('===========================================');

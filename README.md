@@ -74,12 +74,13 @@ NETLIFY_DATABASE_URL_UNPOOLED="postgresql://user:pass@your-neon-url/db?sslmode=r
 ### 3. เริ่มใช้งาน
 ```bash
 # ติดตั้ง dependencies
-cd backend && npm install
-cd ../frontend && npm install
+npm run install
+
+# ตั้งค่า database
+npm run db:setup
 
 # รันเซิร์ฟเวอร์
-cd backend && npm start    # Terminal 1
-cd frontend && npm start   # Terminal 2
+npm run dev
 ```
 
 **🎉 เปิด http://localhost:3000 เท่านี้เอง!**
