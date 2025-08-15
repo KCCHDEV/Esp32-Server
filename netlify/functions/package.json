@@ -1,0 +1,9 @@
+{
+  "name": "esp32-netlify-functions",
+  "version": "1.0.0",
+  "description": "Netlify Functions for ESP32 Zero Code Platform",
+  "main": "api.js",
+  "dependencies": {
+    "serverless-http": "^3.2.0"
+  }
+}
