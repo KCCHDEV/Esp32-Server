@@ -67,6 +67,10 @@ A comprehensive zero-code platform for ESP32 development similar to Blink, featu
 # สร้างไฟล์ backend/.env
 DATABASE_URL="postgresql://user:pass@your-neon-url/db?sslmode=require"
 JWT_SECRET="your-secret-key"
+
+# สำหรับ Netlify (optional - Neon extension จะตั้งให้อัตโนมัติ)
+NETLIFY_DATABASE_URL="postgresql://user:pass@your-neon-url/db?sslmode=require"
+NETLIFY_DATABASE_URL_UNPOOLED="postgresql://user:pass@your-neon-url/db?sslmode=require"
 ```
 
 ### 3. เริ่มใช้งาน

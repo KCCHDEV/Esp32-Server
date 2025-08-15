@@ -59,6 +59,10 @@ npm run client  # Frontend (Terminal 2)
 2. เพิ่ม:
    - `DATABASE_URL`: ใส่ URL จาก Neon
    - `JWT_SECRET`: ใส่ JWT Secret ที่สร้างไว้
+   
+**หรือใช้ Neon Extension (แนะนำ):**
+- ติดตั้ง Neon extension ใน Netlify
+- มันจะตั้งค่า `NETLIFY_DATABASE_URL` และ `NETLIFY_DATABASE_URL_UNPOOLED` อัตโนมัติ
 
 #### Deploy
 ```bash
