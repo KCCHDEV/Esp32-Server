@@ -39,6 +39,7 @@ function App() {
   }
 
   return (
+    <>
     <Routes>
       {/* Public routes */}
       <Route 
@@ -78,6 +79,7 @@ function App() {
       <Route path="*" element={<NotFoundPage />} />
     </Routes>
     <SocketStatus />
+  </>
   );
 }
 
