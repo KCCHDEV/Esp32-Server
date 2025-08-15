@@ -1,5 +1,5 @@
 const jwt = require('jsonwebtoken');
-const User = require('../models/User');
+const { dbHelpers } = require('../lib/prisma');
 
 // Verify JWT token middleware
 const verifyToken = async (req, res, next) => {
@@ -11,7 +11,7 @@ const verifyToken = async (req, res, next) => {
     }
 
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
-    const user = await User.findById(decoded.userId);
+    const user = await dbHelpers.user.findById(decoded.userId);
     
     if (!user || !user.isActive) {
       return res.status(401).json({ message: 'Invalid token or user not found.' });
@@ -35,13 +35,14 @@ const verifyAdmin = (req, res, next) => {
 
 // Premium subscription verification middleware
 const verifyPremium = (req, res, next) => {
-  if (req.user && User.isSubscriptionActive(req.user) && req.user.subscription === 'PREMIUM') {
+  const isActive = req.user ? dbHelpers.user.isSubscriptionActive(req.user) : false;
+  if (req.user && isActive && (req.user.subscription === 'PREMIUM' || req.user.subscription === 'PRO')) {
     next();
   } else {
     return res.status(403).json({ 
       message: 'Premium subscription required.',
       subscription: req.user?.subscription,
-      isActive: req.user ? User.isSubscriptionActive(req.user) : false
+      isActive
     });
   }
 };
@@ -55,34 +56,14 @@ const verifyDeviceApiKey = async (req, res, next) => {
       return res.status(401).json({ message: 'API key required.' });
     }
 
-    const { prisma } = require('../lib/database');
-    const device = await prisma.device.findUnique({
-      where: { apiKey },
-      include: {
-        user: {
-          select: {
-            id: true,
-            username: true,
-            email: true,
-            subscription: true,
-            role: true
-          }
-        }
-      }
-    });
+    const device = await dbHelpers.device.findByApiKey(apiKey);
     
     if (!device || !device.isActive) {
       return res.status(401).json({ message: 'Invalid API key.' });
     }
 
     // Update device last seen
-    await prisma.device.update({
-      where: { id: device.id },
-      data: {
-        lastSeen: new Date(),
-        isOnline: true
-      }
-    });
+    await dbHelpers.device.updateLastSeen(device.id);
 
     req.device = device;
     req.user = device.user;
@@ -102,13 +83,7 @@ const verifyDeviceAccess = async (req, res, next) => {
       return res.status(400).json({ message: 'Device ID required.' });
     }
 
-    const { prisma } = require('../lib/database');
-    const device = await prisma.device.findUnique({
-      where: { id: deviceId },
-      include: {
-        user: true
-      }
-    });
+    const device = await dbHelpers.device.findById(deviceId);
     
     if (!device) {
       return res.status(404).json({ message: 'Device not found.' });
@@ -136,18 +111,7 @@ const verifyProjectAccess = async (req, res, next) => {
       return res.status(400).json({ message: 'Project ID required.' });
     }
 
-    const { prisma } = require('../lib/database');
-    const project = await prisma.project.findUnique({
-      where: { id: projectId },
-      include: {
-        user: true,
-        sharedWith: {
-          include: {
-            user: true
-          }
-        }
-      }
-    });
+    const project = await dbHelpers.project.findById(projectId);
     
     if (!project) {
       return res.status(404).json({ message: 'Project not found.' });
@@ -177,10 +141,11 @@ const verifyProjectAccess = async (req, res, next) => {
 const checkLimits = (type) => {
   return async (req, res, next) => {
     try {
-      const limits = User.getEffectiveLimits(req.user);
+      const { prisma } = require('../lib/prisma');
+      const limits = dbHelpers.user.getEffectiveLimits(req.user);
       
       if (type === 'device') {
-        const deviceCount = await User.countDevices(req.user.id);
+        const deviceCount = await prisma.device.count({ where: { userId: req.user.id } });
         
         if (deviceCount >= limits.devices) {
           return res.status(403).json({ 
@@ -191,7 +156,7 @@ const checkLimits = (type) => {
           });
         }
       } else if (type === 'project') {
-        const projectCount = await User.countProjects(req.user.id);
+        const projectCount = await prisma.project.count({ where: { userId: req.user.id } });
         
         if (projectCount >= limits.projects) {
           return res.status(403).json({ 

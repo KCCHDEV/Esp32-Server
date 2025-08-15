@@ -2,25 +2,29 @@ const { PrismaClient } = require('@prisma/client');
 
 // Create Prisma client instance
 const prisma = new PrismaClient({
-  log: process.env.NODE_ENV === 'development' ? ['query', 'info', 'warn', 'error'] : ['error'],
+  log: process.env.NODE_ENV === 'development' ? ['query', 'error', 'warn'] : ['error'],
+  datasourceUrl: process.env.DATABASE_URL,
 });
 
-// Connect to database
+// Database connection function
 async function connectDatabase() {
   try {
-    await prisma.$connect();
-    console.log('✅ Connected to Neon PostgreSQL database');
-    
     // Test the connection
+    await prisma.$connect();
+    console.log('✅ Connected to Neon PostgreSQL database via Prisma');
+    
+    // Optional: Test with a simple query
     await prisma.$queryRaw`SELECT 1`;
-    console.log('✅ Database connection test successful');
+    console.log('✅ Database query test successful');
+    
+    return prisma;
   } catch (error) {
-    console.error('❌ Database connection failed:', error);
-    process.exit(1);
+    console.error('❌ Failed to connect to database:', error);
+    throw error;
   }
 }
 
-// Disconnect from database
+// Graceful shutdown
 async function disconnectDatabase() {
   try {
     await prisma.$disconnect();
@@ -30,15 +34,15 @@ async function disconnectDatabase() {
   }
 }
 
-// Handle graceful shutdown
+// Handle process termination
 process.on('SIGINT', async () => {
-  console.log('\n🔄 Gracefully shutting down...');
+  console.log('🔄 Received SIGINT, closing database connection...');
   await disconnectDatabase();
   process.exit(0);
 });
 
 process.on('SIGTERM', async () => {
-  console.log('\n🔄 Gracefully shutting down...');
+  console.log('🔄 Received SIGTERM, closing database connection...');
   await disconnectDatabase();
   process.exit(0);
 });
@@ -46,5 +50,5 @@ process.on('SIGTERM', async () => {
 module.exports = {
   prisma,
   connectDatabase,
-  disconnectDatabase,
+  disconnectDatabase
 };
