@@ -1,5 +1,4 @@
 const express = require('express');
-const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const { body, validationResult } = require('express-validator');
 const User = require('../models/User');
@@ -36,28 +35,25 @@ router.post('/register', [
     const { username, email, password } = req.body;
 
     // Check if user already exists
-    const existingUser = await User.findOne({
-      $or: [{ email }, { username }]
-    });
+    const existingUser = await User.findByEmailOrUsername(email);
+    const existingUsername = await User.findByUsername(username);
 
-    if (existingUser) {
+    if (existingUser || existingUsername) {
       return res.status(400).json({ 
         message: 'User already exists with this email or username' 
       });
     }
 
     // Create new user
-    const user = new User({
+    const user = await User.create({
       username,
       email,
       password
     });
 
-    await user.save();
-
     // Generate JWT token
     const token = jwt.sign(
-      { userId: user._id },
+      { userId: user.id },
       process.env.JWT_SECRET,
       { expiresIn: process.env.JWT_EXPIRE || '7d' }
     );
@@ -66,12 +62,12 @@ router.post('/register', [
       message: 'User registered successfully',
       token,
       user: {
-        id: user._id,
+        id: user.id,
         username: user.username,
         email: user.email,
         role: user.role,
         subscription: user.subscription,
-        limits: user.getEffectiveLimits()
+        limits: User.getEffectiveLimits(user)
       }
     });
 
@@ -103,12 +99,7 @@ router.post('/login', [
     const { login, password } = req.body;
 
     // Find user by email or username
-    const user = await User.findOne({
-      $or: [
-        { email: login.toLowerCase() },
-        { username: login }
-      ]
-    });
+    const user = await User.findByEmailOrUsername(login);
 
     if (!user) {
       return res.status(401).json({ message: 'Invalid credentials' });
@@ -119,18 +110,17 @@ router.post('/login', [
     }
 
     // Check password
-    const isPasswordValid = await user.comparePassword(password);
+    const isPasswordValid = await User.comparePassword(password, user.password);
     if (!isPasswordValid) {
       return res.status(401).json({ message: 'Invalid credentials' });
     }
 
     // Update last login
-    user.lastLogin = new Date();
-    await user.save();
+    await User.updateLastLogin(user.id);
 
     // Generate JWT token
     const token = jwt.sign(
-      { userId: user._id },
+      { userId: user.id },
       process.env.JWT_SECRET,
       { expiresIn: process.env.JWT_EXPIRE || '7d' }
     );
@@ -139,13 +129,13 @@ router.post('/login', [
       message: 'Login successful',
       token,
       user: {
-        id: user._id,
+        id: user.id,
         username: user.username,
         email: user.email,
         role: user.role,
         subscription: user.subscription,
-        limits: user.getEffectiveLimits(),
-        lastLogin: user.lastLogin
+        limits: User.getEffectiveLimits(user),
+        lastLogin: new Date()
       }
     });
 
@@ -158,7 +148,7 @@ router.post('/login', [
 // Get current user profile
 router.get('/profile', verifyToken, async (req, res) => {
   try {
-    const user = await User.findById(req.user._id).select('-password');
+    const user = await User.findById(req.user.id);
     
     if (!user) {
       return res.status(404).json({ message: 'User not found' });
@@ -166,13 +156,13 @@ router.get('/profile', verifyToken, async (req, res) => {
 
     res.json({
       user: {
-        id: user._id,
+        id: user.id,
         username: user.username,
         email: user.email,
         role: user.role,
         subscription: user.subscription,
         subscriptionExpiry: user.subscriptionExpiry,
-        limits: user.getEffectiveLimits(),
+        limits: User.getEffectiveLimits(user),
         isActive: user.isActive,
         lastLogin: user.lastLogin,
         createdAt: user.createdAt
@@ -211,40 +201,42 @@ router.put('/profile', verifyToken, [
     }
 
     const { username, email } = req.body;
-    const user = await User.findById(req.user._id);
+    const user = await User.findById(req.user.id);
 
     if (!user) {
       return res.status(404).json({ message: 'User not found' });
     }
 
+    const updateData = {};
+
     // Check for duplicate username/email
     if (username && username !== user.username) {
-      const existingUser = await User.findOne({ username });
+      const existingUser = await User.findByUsername(username);
       if (existingUser) {
         return res.status(400).json({ message: 'Username already taken' });
       }
-      user.username = username;
+      updateData.username = username;
     }
 
     if (email && email !== user.email) {
-      const existingUser = await User.findOne({ email });
+      const existingUser = await User.findByEmail(email);
       if (existingUser) {
         return res.status(400).json({ message: 'Email already taken' });
       }
-      user.email = email;
+      updateData.email = email;
     }
 
-    await user.save();
+    const updatedUser = await User.update(user.id, updateData);
 
     res.json({
       message: 'Profile updated successfully',
       user: {
-        id: user._id,
-        username: user.username,
-        email: user.email,
-        role: user.role,
-        subscription: user.subscription,
-        limits: user.getEffectiveLimits()
+        id: updatedUser.id,
+        username: updatedUser.username,
+        email: updatedUser.email,
+        role: updatedUser.role,
+        subscription: updatedUser.subscription,
+        limits: User.getEffectiveLimits(updatedUser)
       }
     });
 
@@ -274,21 +266,20 @@ router.put('/change-password', verifyToken, [
     }
 
     const { currentPassword, newPassword } = req.body;
-    const user = await User.findById(req.user._id);
+    const user = await User.findById(req.user.id);
 
     if (!user) {
       return res.status(404).json({ message: 'User not found' });
     }
 
     // Verify current password
-    const isCurrentPasswordValid = await user.comparePassword(currentPassword);
+    const isCurrentPasswordValid = await User.comparePassword(currentPassword, user.password);
     if (!isCurrentPasswordValid) {
       return res.status(400).json({ message: 'Current password is incorrect' });
     }
 
     // Update password
-    user.password = newPassword;
-    await user.save();
+    await User.updatePassword(user.id, newPassword);
 
     res.json({ message: 'Password changed successfully' });
 
@@ -303,7 +294,7 @@ router.get('/verify', verifyToken, (req, res) => {
   res.json({ 
     valid: true, 
     user: {
-      id: req.user._id,
+      id: req.user.id,
       username: req.user.username,
       email: req.user.email,
       role: req.user.role,
