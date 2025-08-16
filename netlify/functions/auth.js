@@ -9,7 +9,7 @@ try {
   prisma = new PrismaClient({
     datasources: {
       db: {
-        url: process.env.NETLIFY_DATABASE_URL || process.env.DATABASE_URL
+        url: process.env.NETLIFY_DATABASE_URL
       }
     },
     log: process.env.NODE_ENV === 'development' ? ['query', 'error'] : ['error']

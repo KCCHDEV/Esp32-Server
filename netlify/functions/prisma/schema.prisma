@@ -47,6 +47,7 @@ model User {
   sharedProjects          ProjectShare[]
   auditLogs               AuditLog[]
   sessions                UserSession[]
+  files                   FileStorage[]
 
   @@map("users")
 }
@@ -402,6 +403,9 @@ model FileStorage {
   purpose     String    // PROFILE_PICTURE, PROJECT_ASSET, FIRMWARE, etc.
   isPublic    Boolean   @default(false)
   createdAt   DateTime  @default(now())
+
+  // Relations
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@map("file_storage")
   @@index([userId])

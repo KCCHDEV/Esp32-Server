@@ -35,9 +35,10 @@ async function build() {
     console.log('📦 Installing Netlify Functions dependencies...');
     execSync('npm install', { cwd: './netlify/functions', stdio: 'inherit' });
 
-    // Copy prisma files to functions directory for serverless use
+    // Copy prisma files to functions directory for serverless use (but preserve functions schema)
     console.log('📁 Setting up Prisma for Netlify Functions...');
-    execSync('cp -r backend/prisma netlify/functions/', { stdio: 'inherit' });
+    execSync('cp backend/prisma/seed.js netlify/functions/prisma/ 2>/dev/null || true', { stdio: 'inherit' });
+    // Note: schema.prisma in functions directory is already optimized for serverless
 
     // Generate Prisma client for backend
     console.log('🔧 Generating Prisma client for backend...');

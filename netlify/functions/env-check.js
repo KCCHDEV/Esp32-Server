@@ -86,7 +86,7 @@ exports.handler = async (event, context) => {
 
     // Database URL validation
     let dbValidation = null;
-    const dbUrl = process.env.NETLIFY_DATABASE_URL || process.env.DATABASE_URL;
+    const dbUrl = process.env.NETLIFY_DATABASE_URL;
     
     if (dbUrl) {
       try {

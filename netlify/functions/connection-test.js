@@ -29,7 +29,7 @@ exports.handler = async (event, context) => {
     console.log('🔍 Testing database connection...');
 
     // Check environment variables
-    const dbUrl = process.env.NETLIFY_DATABASE_URL || process.env.DATABASE_URL;
+    const dbUrl = process.env.NETLIFY_DATABASE_URL;
     const jwtSecret = process.env.JWT_SECRET;
 
     const envCheck = {
