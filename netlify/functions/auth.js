@@ -216,16 +216,48 @@ const handleRegister = async (event) => {
 // Database status handler
 const handleDatabaseStatus = async (event) => {
   try {
+    // Check if environment variables are set first
+    if (!process.env.NETLIFY_DATABASE_URL) {
+      return createResponse(503, {
+        success: false,
+        error: 'Database URL not configured',
+        status: 'not_configured',
+        message: 'NETLIFY_DATABASE_URL environment variable is missing',
+        instructions: {
+          step1: 'Go to Netlify Dashboard → Site Settings → Environment Variables',
+          step2: 'Add NETLIFY_DATABASE_URL with your Neon connection string',
+          step3: 'Redeploy your site',
+          helpUrl: '/status'
+        }
+      });
+    }
+
+    if (!process.env.JWT_SECRET) {
+      return createResponse(503, {
+        success: false,
+        error: 'JWT Secret not configured',
+        status: 'not_configured',
+        message: 'JWT_SECRET environment variable is missing',
+        instructions: {
+          step1: 'Generate a secure JWT secret',
+          step2: 'Add JWT_SECRET to Netlify environment variables',
+          step3: 'Redeploy your site',
+          helpUrl: '/status'
+        }
+      });
+    }
+
     if (!prisma) {
       return createResponse(503, {
         success: false,
-        error: 'Database connection failed',
-        status: 'disconnected'
+        error: 'Database client initialization failed',
+        status: 'disconnected',
+        message: 'Could not initialize Prisma client'
       });
     }
 
     // Test database connection and check if setup is needed
-    const result = await prisma.$connect();
+    await prisma.$connect();
     
     try {
       // Check if users table exists and has data
@@ -241,7 +273,8 @@ const handleDatabaseStatus = async (event) => {
           userCount,
           adminExists: !!adminExists,
           setupRequired: userCount === 0,
-          message: userCount === 0 ? 'Database setup required' : 'Database ready'
+          message: userCount === 0 ? 'Database setup required' : 'Database ready',
+          nextStep: userCount === 0 ? 'Visit /auto-setup to create admin user' : 'Ready to login'
         }
       });
 
@@ -250,18 +283,39 @@ const handleDatabaseStatus = async (event) => {
         success: false,
         error: 'Database schema not ready',
         status: 'schema_missing',
-        message: 'Database tables do not exist. Setup required.',
-        setupRequired: true
+        message: 'Database tables do not exist. Schema migration required.',
+        setupRequired: true,
+        instructions: {
+          option1: 'Run database migration locally: cd backend && npx prisma db push',
+          option2: 'Use Neon Dashboard to import schema',
+          option3: 'Contact support for assistance'
+        }
       });
     }
 
   } catch (error) {
     console.error('Database status error:', error);
+    
+    let errorMessage = 'Database connection failed';
+    let instructions = {};
+    
+    if (error.message.includes('connect')) {
+      errorMessage = 'Cannot connect to database';
+      instructions = {
+        check1: 'Verify NETLIFY_DATABASE_URL is correct',
+        check2: 'Ensure Neon database is not sleeping',
+        check3: 'Check connection string format',
+        helpUrl: '/status'
+      };
+    }
+    
     return createResponse(503, {
       success: false,
-      error: 'Database status check failed',
+      error: errorMessage,
       status: 'error',
-      details: process.env.NODE_ENV === 'development' ? error.message : undefined
+      message: error.message,
+      instructions,
+      details: process.env.NODE_ENV === 'development' ? error.stack : undefined
     });
   } finally {
     if (prisma) {
