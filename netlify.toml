@@ -2,53 +2,60 @@
   publish = "frontend/build"
   command = "node scripts/netlify-build.js"
 
-[build.environment]
-  NODE_VERSION = "18"
-
-# Auto-install dependencies for Netlify Functions
+# Auto-install dependencies for functions
 [[plugins]]
   package = "@netlify/plugin-functions-install-core"
 
-# Auth endpoints (more specific routes first)
+# Environment variables for all contexts
+[build.environment]
+  NODE_ENV = "production"
+
+# Production context
+[context.production.environment]
+  REACT_APP_ENABLE_SOCKET = "false"
+
+# Deploy preview context  
+[context.deploy-preview.environment]
+  REACT_APP_ENABLE_SOCKET = "false"
+
+# Branch deploy context
+[context.branch-deploy.environment]
+  REACT_APP_ENABLE_SOCKET = "false"
+
+# API Routes - Order matters (most specific first)
 [[redirects]]
   from = "/api/auth/*"
   to = "/.netlify/functions/auth/:splat"
   status = 200
 
-# Debug endpoint
 [[redirects]]
-  from = "/debug"
-  to = "/.netlify/functions/debug"
+  from = "/env-check"
+  to = "/.netlify/functions/env-check"
   status = 200
 
-# Health check endpoint
-[[redirects]]
-  from = "/health"
-  to = "/.netlify/functions/health"
-  status = 200
-
-# Database migration endpoint
-[[redirects]]
-  from = "/migrate"
-  to = "/.netlify/functions/migrate"
-  status = 200
-
-# Database setup endpoint
-[[redirects]]
-  from = "/setup"
-  to = "/.netlify/functions/setup"
-  status = 200
-
-# Connection test endpoint
 [[redirects]]
   from = "/connection-test"
   to = "/.netlify/functions/connection-test"
   status = 200
 
-# Environment check endpoint
 [[redirects]]
-  from = "/env-check"
-  to = "/.netlify/functions/env-check"
+  from = "/health"
+  to = "/.netlify/functions/health"
+  status = 200
+
+[[redirects]]
+  from = "/setup"
+  to = "/.netlify/functions/setup"
+  status = 200
+
+[[redirects]]
+  from = "/auto-setup"
+  to = "/.netlify/functions/auto-setup"
+  status = 200
+
+[[redirects]]
+  from = "/debug"
+  to = "/.netlify/functions/debug"
   status = 200
 
 # Fallback for other API calls
@@ -62,49 +69,3 @@
   from = "/*"
   to = "/index.html"
   status = 200
-
-# Functions configuration
-[functions]
-  directory = "netlify/functions"
-  
-# Headers for security and CORS
-[[headers]]
-  for = "/api/*"
-  [headers.values]
-    Access-Control-Allow-Origin = "*"
-    Access-Control-Allow-Headers = "Content-Type, Authorization, X-API-Key"
-    Access-Control-Allow-Methods = "GET, POST, PUT, DELETE, OPTIONS"
-
-[[headers]]
-  for = "/*"
-  [headers.values]
-    X-Frame-Options = "DENY"
-    X-XSS-Protection = "1; mode=block"
-    X-Content-Type-Options = "nosniff"
-    Referrer-Policy = "strict-origin-when-cross-origin"
-    Permissions-Policy = "camera=(), microphone=(), geolocation=()"
-
-# Environment variables
-[context.production.environment]
-  NODE_ENV = "production"
-  NETLIFY = "true"
-  # Disable WebSocket connections in serverless environment
-  REACT_APP_ENABLE_SOCKET = "false"
-
-[context.deploy-preview.environment]
-  NODE_ENV = "development"
-  NETLIFY_DEV = "true"
-  # Disable WebSocket connections in serverless environment
-  REACT_APP_ENABLE_SOCKET = "false"
-
-[context.branch-deploy.environment]
-  NODE_ENV = "development"
-  NETLIFY_DEV = "true"
-  # Disable WebSocket connections in serverless environment
-  REACT_APP_ENABLE_SOCKET = "false"
-
-# Note: Set these 4 variables in Netlify Dashboard → Site Settings → Environment Variables:
-# JWT_SECRET (your JWT secret key)
-# JWT_EXPIRE (e.g. "7d")
-# NETLIFY_DATABASE_URL (set by Neon extension or manually)
-# NETLIFY_DATABASE_URL_UNPOOLED (set by Neon extension or manually)

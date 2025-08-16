@@ -2,9 +2,9 @@
 
 A comprehensive zero-code platform for ESP32 development similar to Blink, featuring visual programming, real-time device monitoring, WiFi management, and I2C device detection.
 
-**🌐 Deploy to Netlify + Neon Database in minutes!**
+**🚀 1-Click Deploy: Just Set 4 Environment Variables & Ready!**
 
-[![Deploy to Netlify](https://www.netlify.com/img/deploy/button.svg)](https://app.netlify.com/start/deploy?repository=https://github.com/your-repo/esp32-zero-code-platform)
+[![Deploy to Netlify](https://www.netlify.com/img/deploy/button.svg)](https://app.netlify.com/start/deploy?repository=https://github.com/your-username/esp32-zero-code-platform)
 
 ## ✨ Features
 
@@ -85,10 +85,25 @@ npm run dev
 
 **🎉 เปิด http://localhost:3000 เท่านี้เอง!**
 
-### 📖 รายละเอียดเพิ่มเติม
-ดูใน [SETUP.md](./SETUP.md) สำหรับขั้นตอนละเอียดและการ deploy
+## 🚀 Deploy to Netlify (5 นาที)
 
-[![Deploy to Netlify](https://www.netlify.com/img/deploy/button.svg)](https://app.netlify.com/start/deploy?repository=https://github.com/your-repo/esp32-zero-code-platform)
+### ⚡ Super Easy Setup
+1. **กด Deploy** → [![Deploy to Netlify](https://www.netlify.com/img/deploy/button.svg)](https://app.netlify.com/start/deploy?repository=https://github.com/your-username/esp32-zero-code-platform)
+2. **สร้าง Neon DB** → [Neon.tech](https://neon.tech) (ฟรี) → คัดลอก connection string
+3. **ตั้งค่า 4 ตัวแปร** ใน Netlify Environment Variables:
+   ```
+   NETLIFY_DATABASE_URL = postgresql://...จาก Neon
+   JWT_SECRET = สุ่มสตริง 32+ ตัวอักษร  
+   JWT_EXPIRE = 7d
+   NODE_ENV = production
+   ```
+4. **Deploy ใหม่** → รอสร้างเสร็จ → เข้า `/auto-setup` → เก็บรหัส admin
+
+🎉 **เสร็จแล้ว!** ระบบพร้อมใช้งาน!
+
+### 📖 คู่มือฉบับเต็ม
+- [DEPLOY_TO_NETLIFY.md](./DEPLOY_TO_NETLIFY.md) - คู่มือ deploy แบบละเอียด
+- [SETUP.md](./SETUP.md) - สำหรับติดตั้งใน local
 
 ## 💻 Local Development
 
