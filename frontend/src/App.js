@@ -7,6 +7,8 @@ import Layout from './components/Layout';
 import ProtectedRoute from './components/ProtectedRoute';
 import SocketStatus from './components/SocketStatus';
 import ErrorBoundary from './components/ErrorBoundary';
+import SetupBanner from './components/SetupBanner';
+import SetupRedirect from './components/SetupRedirect';
 
 // Pages
 import LoginPage from './pages/LoginPage';
@@ -40,8 +42,10 @@ function App() {
   }
 
   return (
-    <ErrorBoundary>
-      <>
+    <SetupRedirect>
+      <ErrorBoundary>
+        <>
+          <SetupBanner />
       <Routes>
       {/* Public routes */}
       <Route 
@@ -83,6 +87,7 @@ function App() {
       <SocketStatus />
     </>
     </ErrorBoundary>
+    </SetupRedirect>
   );
 }
 
