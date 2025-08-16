@@ -45,18 +45,26 @@ const handleLogin = async (event) => {
       });
     }
 
-    const { email, password } = JSON.parse(event.body || '{}');
+    const { email, login, password } = JSON.parse(event.body || '{}');
+    
+    // Support both email and login field (for compatibility)
+    const loginField = email || login;
 
-    if (!email || !password) {
+    if (!loginField || !password) {
       return createResponse(400, {
         success: false,
-        error: 'Email and password are required'
+        error: 'Email/username and password are required'
       });
     }
 
-    // Find user
-    const user = await prisma.user.findUnique({
-      where: { email: email.toLowerCase() }
+    // Find user by email or username
+    const user = await prisma.user.findFirst({
+      where: {
+        OR: [
+          { email: loginField.toLowerCase() },
+          { username: loginField.toLowerCase() }
+        ]
+      }
     });
 
     if (!user) {
@@ -90,15 +98,13 @@ const handleLogin = async (event) => {
     return createResponse(200, {
       success: true,
       message: 'Login successful',
-      data: {
-        token,
-        user: {
-          id: user.id,
-          email: user.email,
-          username: user.username,
-          role: user.role,
-          isActive: user.isActive
-        }
+      token,
+      user: {
+        id: user.id,
+        email: user.email,
+        username: user.username,
+        role: user.role,
+        isActive: user.isActive
       }
     });
 
@@ -187,15 +193,13 @@ const handleRegister = async (event) => {
     return createResponse(201, {
       success: true,
       message: 'User registered successfully',
-      data: {
-        token,
-        user: {
-          id: user.id,
-          email: user.email,
-          username: user.username,
-          role: user.role,
-          isActive: user.isActive
-        }
+      token,
+      user: {
+        id: user.id,
+        email: user.email,
+        username: user.username,
+        role: user.role,
+        isActive: user.isActive
       }
     });
 
@@ -209,6 +213,63 @@ const handleRegister = async (event) => {
   }
 };
 
+// Database status handler
+const handleDatabaseStatus = async (event) => {
+  try {
+    if (!prisma) {
+      return createResponse(503, {
+        success: false,
+        error: 'Database connection failed',
+        status: 'disconnected'
+      });
+    }
+
+    // Test database connection and check if setup is needed
+    const result = await prisma.$connect();
+    
+    try {
+      // Check if users table exists and has data
+      const userCount = await prisma.user.count();
+      const adminExists = await prisma.user.findUnique({
+        where: { email: 'admin@esp32platform.com' }
+      });
+
+      return createResponse(200, {
+        success: true,
+        status: 'connected',
+        data: {
+          userCount,
+          adminExists: !!adminExists,
+          setupRequired: userCount === 0,
+          message: userCount === 0 ? 'Database setup required' : 'Database ready'
+        }
+      });
+
+    } catch (schemaError) {
+      return createResponse(503, {
+        success: false,
+        error: 'Database schema not ready',
+        status: 'schema_missing',
+        message: 'Database tables do not exist. Setup required.',
+        setupRequired: true
+      });
+    }
+
+  } catch (error) {
+    console.error('Database status error:', error);
+    return createResponse(503, {
+      success: false,
+      error: 'Database status check failed',
+      status: 'error',
+      details: process.env.NODE_ENV === 'development' ? error.message : undefined
+    });
+  } finally {
+    if (prisma) {
+      await prisma.$disconnect();
+    }
+  }
+};
+
 // Database setup handler
 const handleSetupDatabase = async (event) => {
   try {
@@ -219,12 +280,21 @@ const handleSetupDatabase = async (event) => {
       });
     }
 
-    // Check if users already exist (prevent setup in production with existing users)
+    // Check if users already exist
     const userCount = await prisma.user.count();
-    if (userCount > 0 && process.env.NODE_ENV === 'production') {
-      return createResponse(409, {
-        success: false,
-        error: 'Database already contains users. Setup not allowed in production.'
+    const adminExists = await prisma.user.findUnique({
+      where: { email: 'admin@esp32platform.com' }
+    });
+    
+    if (adminExists) {
+      return createResponse(200, {
+        success: true,
+        message: 'Admin user already exists',
+        data: {
+          adminExists: true,
+          userCount,
+          note: 'Admin user is already set up. Use existing credentials or reset password if needed.'
+        }
       });
     }
 
@@ -312,11 +382,17 @@ exports.handler = async (event, context) => {
         }
         break;
       
+      case '/database-status':
+        if (event.httpMethod === 'GET') {
+          return await handleDatabaseStatus(event);
+        }
+        break;
+      
       default:
         return createResponse(404, {
           success: false,
           error: 'Auth endpoint not found',
-          availableEndpoints: ['/login', '/register', '/setup-database']
+          availableEndpoints: ['/login', '/register', '/setup-database', '/database-status']
         });
     }
 
