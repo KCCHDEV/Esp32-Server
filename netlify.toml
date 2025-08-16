@@ -27,6 +27,18 @@
   to = "/.netlify/functions/health"
   status = 200
 
+# Database migration endpoint
+[[redirects]]
+  from = "/migrate"
+  to = "/.netlify/functions/migrate"
+  status = 200
+
+# Database setup endpoint
+[[redirects]]
+  from = "/setup"
+  to = "/.netlify/functions/setup"
+  status = 200
+
 # Fallback for other API calls
 [[redirects]]
   from = "/api/*"

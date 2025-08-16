@@ -80,6 +80,7 @@ const handleLogin = async (event) => {
       { 
         userId: user.id, 
         email: user.email,
+        username: user.username,
         role: user.role 
       },
       process.env.JWT_SECRET,
@@ -94,7 +95,7 @@ const handleLogin = async (event) => {
         user: {
           id: user.id,
           email: user.email,
-          name: user.name,
+          username: user.username,
           role: user.role,
           isActive: user.isActive
         }
@@ -121,12 +122,12 @@ const handleRegister = async (event) => {
       });
     }
 
-    const { name, email, password } = JSON.parse(event.body || '{}');
+    const { username, email, password } = JSON.parse(event.body || '{}');
 
-    if (!name || !email || !password) {
+    if (!username || !email || !password) {
       return createResponse(400, {
         success: false,
-        error: 'Name, email, and password are required'
+        error: 'Username, email, and password are required'
       });
     }
 
@@ -138,15 +139,20 @@ const handleRegister = async (event) => {
       });
     }
 
-    // Check if user already exists
-    const existingUser = await prisma.user.findUnique({
-      where: { email: email.toLowerCase() }
+    // Check if user already exists (email or username)
+    const existingUser = await prisma.user.findFirst({
+      where: {
+        OR: [
+          { email: email.toLowerCase() },
+          { username: username.toLowerCase() }
+        ]
+      }
     });
 
     if (existingUser) {
       return createResponse(409, {
         success: false,
-        error: 'User with this email already exists'
+        error: 'User with this email or username already exists'
       });
     }
 
@@ -156,7 +162,7 @@ const handleRegister = async (event) => {
     // Create user
     const user = await prisma.user.create({
       data: {
-        name,
+        username: username.toLowerCase(),
         email: email.toLowerCase(),
         password: hashedPassword,
         role: 'USER',
@@ -171,6 +177,7 @@ const handleRegister = async (event) => {
       { 
         userId: user.id, 
         email: user.email,
+        username: user.username,
         role: user.role 
       },
       process.env.JWT_SECRET,
@@ -185,7 +192,7 @@ const handleRegister = async (event) => {
         user: {
           id: user.id,
           email: user.email,
-          name: user.name,
+          username: user.username,
           role: user.role,
           isActive: user.isActive
         }
@@ -233,7 +240,7 @@ const handleSetupDatabase = async (event) => {
         isActive: true
       },
       create: {
-        name: 'System Administrator',
+        username: 'admin',
         email: 'admin@esp32platform.com',
         password: hashedPassword,
         role: 'ADMIN',
