@@ -11,12 +11,23 @@ const router = express.Router();
 // Database setup endpoint (for first-time setup)
 router.post('/setup-database', async (req, res) => {
   try {
+    // Only allow database setup in development or if no users exist
+    if (process.env.NODE_ENV === 'production') {
+      const userCount = await dbHelpers.user.count();
+      if (userCount > 0) {
+        return res.status(403).json({ 
+          message: 'Database setup is disabled in production when users exist',
+          setupComplete: true
+        });
+      }
+    }
+    
     console.log('📋 Database setup requested');
     
     // Check if database is already setup
     try {
-      const userCount = await dbHelpers.user.findByEmail('admin@esp32platform.com');
-      if (userCount) {
+      const existingAdmin = await dbHelpers.user.findByEmail('admin@esp32platform.com');
+      if (existingAdmin) {
         return res.status(400).json({ 
           message: 'Database is already set up',
           setupComplete: true
@@ -30,14 +41,16 @@ router.post('/setup-database', async (req, res) => {
     // Run manual database setup
     await manualDatabaseSetup();
     
-    // Create admin user
-    const adminPassword = await bcrypt.hash('admin123', 12);
+    // Generate secure random password for admin
+    const crypto = require('crypto');
+    const adminPassword = crypto.randomBytes(16).toString('hex');
+    const hashedPassword = await bcrypt.hash(adminPassword, 12);
     
     try {
       await dbHelpers.user.create({
         username: 'admin',
         email: 'admin@esp32platform.com',
-        password: adminPassword,
+        password: hashedPassword,
         role: 'ADMIN',
         subscription: 'PREMIUM',
         emailVerified: true,
@@ -45,8 +58,21 @@ router.post('/setup-database', async (req, res) => {
       });
       
       console.log('✅ Admin user created successfully');
+      console.log(`🔑 Admin password: ${adminPassword}`);
+      
+      // Return admin credentials (only for setup)
+      res.json({
+        message: 'Database setup completed successfully',
+        setupComplete: true,
+        adminCredentials: {
+          email: 'admin@esp32platform.com',
+          password: adminPassword
+        },
+        note: 'Please change the admin password immediately after first login'
+      });
     } catch (error) {
-      console.log('⚠️ Admin user might already exist');
+      console.log('⚠️ Admin user creation failed:', error);
+      throw error;
     }
     
     res.json({
@@ -107,8 +133,10 @@ router.post('/register', [
     .normalizeEmail()
     .withMessage('Please provide a valid email'),
   body('password')
-    .isLength({ min: 6 })
-    .withMessage('Password must be at least 6 characters long')
+    .isLength({ min: 8 })
+    .withMessage('Password must be at least 8 characters long')
+    .matches(/^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]/)
+    .withMessage('Password must contain at least one uppercase letter, one lowercase letter, one number, and one special character')
 ], async (req, res) => {
   try {
     // Check validation errors
@@ -158,6 +186,10 @@ router.post('/register', [
     // Hash password
     const hashedPassword = await bcrypt.hash(password, 12);
 
+    // Generate email verification token
+    const crypto = require('crypto');
+    const emailVerificationToken = crypto.randomBytes(32).toString('hex');
+    
     // Create new user
     const user = await dbHelpers.user.create({
       username,
@@ -166,7 +198,10 @@ router.post('/register', [
       role: 'USER',
       subscription: 'FREE',
       isActive: true,
-      emailVerified: false
+      emailVerified: false,
+      emailVerificationToken,
+      deviceLimit: 3,
+      projectLimit: 5
     });
 
     // Generate JWT token

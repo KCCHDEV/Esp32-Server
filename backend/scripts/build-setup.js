@@ -27,21 +27,19 @@ console.log(`🔍 Environment: ${process.env.NODE_ENV || 'development'}`);
 console.log(`📦 Netlify: ${isNetlify ? 'Yes' : 'No'}`);
 console.log(`🏗️  CI/Build: ${isBuild ? 'Yes' : 'No'}`);
 
-// Use appropriate database URL with priority order
-const databaseUrl = process.env.NETLIFY_DATABASE_URL || 
-                   process.env.DATABASE_URL || 
-                   process.env.NEON_DATABASE_URL;
+// Use NETLIFY_DATABASE_URL (required)
+const databaseUrl = process.env.NETLIFY_DATABASE_URL;
 
 if (!databaseUrl) {
   console.log('⚠️  No database URL found - skipping database setup');
-  console.log('   Available variables: NETLIFY_DATABASE_URL, DATABASE_URL, NEON_DATABASE_URL');
+  console.log('   Required variable: NETLIFY_DATABASE_URL');
   console.log('   This is normal for frontend-only builds or when DB is not configured');
   
   if (isNetlify || isCI) {
     console.log('   Build will continue without database setup');
     process.exit(0);
   } else {
-    console.log('   For local development, please set DATABASE_URL in .env file');
+    console.log('   For local development, please set NETLIFY_DATABASE_URL in .env file');
     process.exit(0);
   }
 }
@@ -155,7 +153,7 @@ async function setupDatabaseWithPrisma() {
     await new Promise((resolve, reject) => {
       const env = { 
         ...process.env,
-        DATABASE_URL: databaseUrl
+        NETLIFY_DATABASE_URL: databaseUrl
       };
       
       const dbPush = spawn('npx', ['prisma', 'db', 'push', '--accept-data-loss'], {
@@ -413,8 +411,8 @@ function generatePrismaClient() {
     
     const env = { 
       ...process.env,
-      DATABASE_URL: databaseUrl,
-      NETLIFY_DATABASE_URL: databaseUrl
+      NETLIFY_DATABASE_URL: databaseUrl,
+      NETLIFY_DATABASE_URL_UNPOOLED: process.env.NETLIFY_DATABASE_URL_UNPOOLED
     };
     
     const generate = spawn('npx', ['prisma', 'generate'], {

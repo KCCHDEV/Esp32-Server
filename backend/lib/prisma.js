@@ -3,8 +3,8 @@ const { PrismaClient } = require('@prisma/client');
 // Create a global Prisma instance
 const globalForPrisma = globalThis;
 
-// Use Netlify environment variables if available, fallback to standard DATABASE_URL
-const databaseUrl = process.env.NETLIFY_DATABASE_URL || process.env.DATABASE_URL;
+// Use Netlify environment variables (required)
+const databaseUrl = process.env.NETLIFY_DATABASE_URL;
 
 const prisma = globalForPrisma.prisma || new PrismaClient({
   log: process.env.NODE_ENV === 'development' ? ['query', 'error', 'warn'] : ['error'],

@@ -5,6 +5,9 @@ import { Box } from '@mui/material';
 import { useAuth } from './contexts/AuthContext';
 import Layout from './components/Layout';
 import ProtectedRoute from './components/ProtectedRoute';
+import SocketStatus from './components/SocketStatus';
+import ErrorBoundary from './components/ErrorBoundary';
+import SetupBanner from './components/SetupBanner';
 
 // Pages
 import LoginPage from './pages/LoginPage';
@@ -38,7 +41,10 @@ function App() {
   }
 
   return (
-    <Routes>
+      <ErrorBoundary>
+        <>
+          <SetupBanner />
+      <Routes>
       {/* Public routes */}
       <Route 
         path="/login" 
@@ -75,7 +81,10 @@ function App() {
 
       {/* 404 route */}
       <Route path="*" element={<NotFoundPage />} />
-    </Routes>
+      </Routes>
+      <SocketStatus />
+            </>
+      </ErrorBoundary>
   );
 }
 

@@ -2,9 +2,9 @@
 
 A comprehensive zero-code platform for ESP32 development similar to Blink, featuring visual programming, real-time device monitoring, WiFi management, and I2C device detection.
 
-**🌐 Deploy to Netlify + Neon Database in minutes!**
+**🚀 1-Click Deploy: Just Set 4 Environment Variables & Ready!**
 
-[![Deploy to Netlify](https://www.netlify.com/img/deploy/button.svg)](https://app.netlify.com/start/deploy?repository=https://github.com/your-repo/esp32-zero-code-platform)
+[![Deploy to Netlify](https://www.netlify.com/img/deploy/button.svg)](https://app.netlify.com/start/deploy?repository=https://github.com/your-username/esp32-zero-code-platform)
 
 ## ✨ Features
 
@@ -56,34 +56,58 @@ A comprehensive zero-code platform for ESP32 development similar to Blink, featu
 └─────────────────┘    └─────────────────┘    └─────────────────┘
 ```
 
-## 🚀 Quick Deploy (Recommended)
+## 🚀 ตั้งค่าง่ายๆ แค่ 3 ขั้นตอน!
 
-### 1. One-Click Deploy to Netlify
+### 1. สร้าง Database (ฟรี!)
+- ไปที่ [neon.tech](https://neon.tech) 
+- สร้าง project และคัดลอก Database URL
 
-[![Deploy to Netlify](https://www.netlify.com/img/deploy/button.svg)](https://app.netlify.com/start/deploy?repository=https://github.com/your-repo/esp32-zero-code-platform)
-
-### 2. Set Up Neon Database
-1. Create free account at [neon.tech](https://neon.tech)
-2. Create a new PostgreSQL database
-3. Copy the connection string
-
-### 3. Configure Environment Variables
-In Netlify dashboard, add these environment variables:
-
+### 2. ตั้งค่า Environment (แค่ 4 ตัวแปร!)
 ```bash
-DATABASE_URL=postgresql://username:password@ep-example.us-east-1.aws.neon.tech/neondb?sslmode=require
-DIRECT_URL=postgresql://username:password@ep-example.us-east-1.aws.neon.tech/neondb?sslmode=require
-JWT_SECRET=your_super_secret_jwt_key_minimum_32_characters_long
-NODE_ENV=production
-NETLIFY=true
+# สร้างไฟล์ backend/.env
+JWT_SECRET="your-secret-key"
+JWT_EXPIRE="7d"
+NETLIFY_DATABASE_URL="postgresql://user:pass@your-neon-url/db?sslmode=require"
+NETLIFY_DATABASE_URL_UNPOOLED="postgresql://user:pass@your-neon-url/db?sslmode=require"
 ```
 
-### 4. Deploy!
-- Your platform will be live at `https://your-app-name.netlify.app`
-- Database schema is automatically created
-- Admin account is seeded with demo data
+### 3. เริ่มใช้งาน
+```bash
+# ติดตั้ง dependencies
+npm run install
 
-**🎉 That's it! Your ESP32 platform is now live!**
+# ตั้งค่า database
+npm run db:setup
+
+# รันเซิร์ฟเวอร์
+npm run dev
+```
+
+**🎉 เปิด http://localhost:3000 เท่านี้เอง!**
+
+## 🚀 Deploy to Netlify (5 นาที)
+
+### ⚡ Super Easy Setup (Auto Database Setup!)
+1. **กด Deploy** → [![Deploy to Netlify](https://www.netlify.com/img/deploy/button.svg)](https://app.netlify.com/start/deploy?repository=https://github.com/your-username/esp32-zero-code-platform)
+2. **สร้าง Neon DB** → [Neon.tech](https://neon.tech) (ฟรี) → คัดลอก connection string
+3. **ตั้งค่า 2 ตัวแปรเท่านั้น** ใน Netlify Environment Variables:
+   ```
+   NETLIFY_DATABASE_URL = postgresql://...จาก Neon
+   JWT_SECRET = สุ่มสตริง 32+ ตัวอักษร  
+   ```
+4. **Deploy ใหม่** → **Database จะ setup อัตโนมัติ!** → **Admin password ใน build log**
+
+🎉 **เสร็จแล้ว!** ระบบพร้อมใช้งานทันที - ไม่ต้องทำอะไรเพิ่ม!
+
+### ✨ **ใหม่! Auto Setup ระหว่าง Build**
+- ✅ **Database Schema** สร้างอัตโนมัติ
+- ✅ **Admin User** สร้างให้ (ดู build log สำหรับ password)  
+- ✅ **พร้อมใช้ทันที** หลัง deploy เสร็จ
+- ✅ **ไม่ต้องเข้า /auto-setup** แล้ว!
+
+### 📖 คู่มือฉบับเต็ม
+- [DEPLOY_TO_NETLIFY.md](./DEPLOY_TO_NETLIFY.md) - คู่มือ deploy แบบละเอียด
+- [SETUP.md](./SETUP.md) - สำหรับติดตั้งใน local
 
 ## 💻 Local Development
 
