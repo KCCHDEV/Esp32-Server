@@ -6,9 +6,18 @@ const SetupRedirect = ({ children }) => {
   const [setupStatus, setSetupStatus] = useState('checking');
   const [countdown, setCountdown] = useState(5);
 
-  useEffect(() => {
-    checkSetupAndRedirect();
-  }, [checkSetupAndRedirect]);
+  const startCountdown = useCallback(() => {
+    const timer = setInterval(() => {
+      setCountdown((prev) => {
+        if (prev <= 1) {
+          clearInterval(timer);
+          window.location.href = '/status';
+          return 0;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+  }, []);
 
   const checkSetupAndRedirect = useCallback(async () => {
     try {
@@ -36,18 +45,9 @@ const SetupRedirect = ({ children }) => {
     }
   }, [startCountdown]);
 
-  const startCountdown = useCallback(() => {
-    const timer = setInterval(() => {
-      setCountdown((prev) => {
-        if (prev <= 1) {
-          clearInterval(timer);
-          window.location.href = '/status';
-          return 0;
-        }
-        return prev - 1;
-      });
-    }, 1000);
-  }, []);
+  useEffect(() => {
+    checkSetupAndRedirect();
+  }, [checkSetupAndRedirect]);
 
   const redirectNow = () => {
     window.location.href = '/status';
