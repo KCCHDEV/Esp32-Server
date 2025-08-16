@@ -39,6 +39,18 @@
   to = "/.netlify/functions/setup"
   status = 200
 
+# Connection test endpoint
+[[redirects]]
+  from = "/connection-test"
+  to = "/.netlify/functions/connection-test"
+  status = 200
+
+# Environment check endpoint
+[[redirects]]
+  from = "/env-check"
+  to = "/.netlify/functions/env-check"
+  status = 200
+
 # Fallback for other API calls
 [[redirects]]
   from = "/api/*"
