@@ -71,16 +71,28 @@ async function netlifyBuild() {
     console.log('✅ Netlify Functions dependencies installed');
     
     console.log('🔧 Step 2: Generating Prisma Client...');
+    
+    // Generate Prisma client for backend
     await runCommand('npx', ['prisma', 'generate'], {
       cwd: './backend',
       env: {
         ...process.env,
-        // Ensure NETLIFY_DATABASE_URL is available for Prisma
         NETLIFY_DATABASE_URL: process.env.NETLIFY_DATABASE_URL,
         NETLIFY_DATABASE_URL_UNPOOLED: process.env.NETLIFY_DATABASE_URL_UNPOOLED
       }
     });
-    console.log('✅ Prisma Client generated');
+    console.log('✅ Backend Prisma client generated');
+    
+    // Generate Prisma client for functions
+    await runCommand('npx', ['prisma', 'generate'], {
+      cwd: './netlify/functions',
+      env: {
+        ...process.env,
+        NETLIFY_DATABASE_URL: process.env.NETLIFY_DATABASE_URL,
+        NETLIFY_DATABASE_URL_UNPOOLED: process.env.NETLIFY_DATABASE_URL_UNPOOLED
+      }
+    });
+    console.log('✅ Functions Prisma client generated');
     
     console.log('🏗️  Step 3: Building frontend...');
     await runCommand('npm', ['run', 'build'], {

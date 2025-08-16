@@ -9,16 +9,28 @@
 [[plugins]]
   package = "@netlify/plugin-functions-install-core"
 
-# Redirect all API calls to serverless functions
+# Auth endpoints (more specific routes first)
 [[redirects]]
-  from = "/api/*"
-  to = "/.netlify/functions/api/:splat"
+  from = "/api/auth/*"
+  to = "/.netlify/functions/auth/:splat"
   status = 200
 
 # Debug endpoint
 [[redirects]]
   from = "/debug"
   to = "/.netlify/functions/debug"
+  status = 200
+
+# Health check endpoint
+[[redirects]]
+  from = "/health"
+  to = "/.netlify/functions/health"
+  status = 200
+
+# Fallback for other API calls
+[[redirects]]
+  from = "/api/*"
+  to = "/.netlify/functions/api/:splat"
   status = 200
 
 # SPA fallback for React Router
