@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Alert, AlertTitle, Button, Box, Typography, Link } from '@mui/material';
-import { Settings, Warning, CheckCircle } from '@mui/icons-material';
+import { Settings, Warning } from '@mui/icons-material';
 
 const SetupBanner = () => {
   const [setupStatus, setSetupStatus] = useState(null);

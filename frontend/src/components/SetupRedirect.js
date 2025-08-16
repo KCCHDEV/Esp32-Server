@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import { Box, Typography, CircularProgress, Button } from '@mui/material';
 import { Settings } from '@mui/icons-material';
 
@@ -8,9 +8,9 @@ const SetupRedirect = ({ children }) => {
 
   useEffect(() => {
     checkSetupAndRedirect();
-  }, []);
+  }, [checkSetupAndRedirect]);
 
-  const checkSetupAndRedirect = async () => {
+  const checkSetupAndRedirect = useCallback(async () => {
     try {
       // Check if we're in Netlify environment
       const isNetlify = window.location.hostname.includes('netlify.app') || 
@@ -34,9 +34,9 @@ const SetupRedirect = ({ children }) => {
       setSetupStatus('needs_setup');
       startCountdown();
     }
-  };
+  }, [startCountdown]);
 
-  const startCountdown = () => {
+  const startCountdown = useCallback(() => {
     const timer = setInterval(() => {
       setCountdown((prev) => {
         if (prev <= 1) {
@@ -47,7 +47,7 @@ const SetupRedirect = ({ children }) => {
         return prev - 1;
       });
     }, 1000);
-  };
+  }, []);
 
   const redirectNow = () => {
     window.location.href = '/status';
