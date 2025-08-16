@@ -87,19 +87,23 @@ npm run dev
 
 ## 🚀 Deploy to Netlify (5 นาที)
 
-### ⚡ Super Easy Setup
+### ⚡ Super Easy Setup (Auto Database Setup!)
 1. **กด Deploy** → [![Deploy to Netlify](https://www.netlify.com/img/deploy/button.svg)](https://app.netlify.com/start/deploy?repository=https://github.com/your-username/esp32-zero-code-platform)
 2. **สร้าง Neon DB** → [Neon.tech](https://neon.tech) (ฟรี) → คัดลอก connection string
-3. **ตั้งค่า 4 ตัวแปร** ใน Netlify Environment Variables:
+3. **ตั้งค่า 2 ตัวแปรเท่านั้น** ใน Netlify Environment Variables:
    ```
    NETLIFY_DATABASE_URL = postgresql://...จาก Neon
    JWT_SECRET = สุ่มสตริง 32+ ตัวอักษร  
-   JWT_EXPIRE = 7d
-   NODE_ENV = production
    ```
-4. **Deploy ใหม่** → รอสร้างเสร็จ → เข้า `/auto-setup` → เก็บรหัส admin
+4. **Deploy ใหม่** → **Database จะ setup อัตโนมัติ!** → **Admin password ใน build log**
 
-🎉 **เสร็จแล้ว!** ระบบพร้อมใช้งาน!
+🎉 **เสร็จแล้ว!** ระบบพร้อมใช้งานทันที - ไม่ต้องทำอะไรเพิ่ม!
+
+### ✨ **ใหม่! Auto Setup ระหว่าง Build**
+- ✅ **Database Schema** สร้างอัตโนมัติ
+- ✅ **Admin User** สร้างให้ (ดู build log สำหรับ password)  
+- ✅ **พร้อมใช้ทันที** หลัง deploy เสร็จ
+- ✅ **ไม่ต้องเข้า /auto-setup** แล้ว!
 
 ### 📖 คู่มือฉบับเต็ม
 - [DEPLOY_TO_NETLIFY.md](./DEPLOY_TO_NETLIFY.md) - คู่มือ deploy แบบละเอียด
