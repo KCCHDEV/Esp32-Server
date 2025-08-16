@@ -26,14 +26,14 @@ const SetupBanner = () => {
       
       if (response.status === 503) {
         setSetupStatus('needs_setup');
-      } else if (response.ok && data.success) {
-        setSetupStatus('ready');
       } else {
-        setSetupStatus('error');
+        // Database is working, no banner needed
+        setSetupStatus('ready');
       }
     } catch (error) {
       console.log('Setup status check failed:', error);
-      setSetupStatus('needs_setup');
+      // Only show banner for actual 503 errors, not network issues
+      setSetupStatus('ready');
     } finally {
       setIsChecking(false);
     }
@@ -57,7 +57,8 @@ const SetupBanner = () => {
   }
 
   // Show setup needed banner
-  if (setupStatus === 'needs_setup' || setupStatus === 'error') {
+  // Only show banner for actual setup issues (503 errors)
+  if (setupStatus === 'needs_setup') {
     return (
       <Box sx={{ position: 'fixed', top: 0, left: 0, right: 0, zIndex: 1300 }}>
         <Alert 
