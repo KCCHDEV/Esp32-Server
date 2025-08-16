@@ -164,26 +164,37 @@ exports.handler = async (event, context) => {
             Your ESP32 Zero-Code Platform is properly configured!
         </div>
         
-        <div class="step">
-            <h3>Next Steps:</h3>
-            <ol>
-                <li>Visit <a href="/auto-setup" class="button">Auto-Setup</a> to create admin user</li>
-                <li>Go to <a href="/login" class="button">Login Page</a> to access dashboard</li>
-                <li>Check <a href="/health" class="button">System Health</a> for detailed status</li>
-            </ol>
-        </div>
+                 <div class="step">
+             <h3>Next Steps:</h3>
+             <ol>
+                 <li>Visit <a href="/auto-setup" class="button">Auto-Setup</a> to create admin user</li>
+                 <li>Go to <a href="/login" class="button">Login Page</a> to access dashboard</li>
+                 <li>Check <a href="/health" class="button">System Health</a> for detailed status</li>
+             </ol>
+         </div>
+         
+         ${dbError && dbError.includes('does not exist') ? `
+         <div class="step">
+             <h3>🔧 Schema Issue Detected:</h3>
+             <p>Your database exists but the schema is outdated. Click below to automatically update it:</p>
+             <a href="/migrate-schema" class="button" style="background-color: #ff9800;">
+                 Update Database Schema
+             </a>
+         </div>
+         ` : ''}
         `}
         
         <h2>🔧 Diagnostic Tools</h2>
-        <div class="status info">
-            <strong>Available Endpoints:</strong>
-            <ul>
-                <li><a href="/env-check" target="_blank">/env-check</a> - Detailed environment validation</li>
-                <li><a href="/connection-test" target="_blank">/connection-test</a> - Database connection testing</li>
-                <li><a href="/health" target="_blank">/health</a> - System health monitoring</li>
-                <li><a href="/auto-setup" target="_blank">/auto-setup</a> - Complete automated setup</li>
-            </ul>
-        </div>
+                 <div class="status info">
+             <strong>Available Endpoints:</strong>
+             <ul>
+                 <li><a href="/env-check" target="_blank">/env-check</a> - Detailed environment validation</li>
+                 <li><a href="/connection-test" target="_blank">/connection-test</a> - Database connection testing</li>
+                 <li><a href="/health" target="_blank">/health</a> - System health monitoring</li>
+                 <li><a href="/auto-setup" target="_blank">/auto-setup</a> - Complete automated setup</li>
+                 <li><a href="/migrate-schema" target="_blank">/migrate-schema</a> - Update database schema</li>
+             </ul>
+         </div>
         
         <h2>📋 Environment Details</h2>
         <div class="code">

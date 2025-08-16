@@ -59,6 +59,11 @@
   status = 200
 
 [[redirects]]
+  from = "/migrate-schema"
+  to = "/.netlify/functions/migrate-schema"
+  status = 200
+
+[[redirects]]
   from = "/debug"
   to = "/.netlify/functions/debug"
   status = 200
