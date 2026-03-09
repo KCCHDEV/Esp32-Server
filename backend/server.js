@@ -2,12 +2,14 @@ const express = require('express');
 const cors = require('cors');
 const helmet = require('helmet');
 const rateLimit = require('express-rate-limit');
+const path = require('path');
 const { createServer } = require('http');
 const { Server } = require('socket.io');
 require('dotenv').config();
 
 const { connectDatabase } = require('./lib/database');
 const authRoutes = require('./routes/auth');
+const dashboardRoutes = require('./routes/dashboard');
 const deviceRoutes = require('./routes/devices');
 const projectRoutes = require('./routes/projects');
 const adminRoutes = require('./routes/admin');
@@ -16,10 +18,10 @@ const apiRoutes = require('./routes/api');
 
 const app = express();
 
-// Determine CORS origin based on environment
-const corsOrigin = process.env.NODE_ENV === 'production' 
-  ? [process.env.CORS_ORIGIN_PROD, process.env.CORS_ORIGIN]
-  : process.env.CORS_ORIGIN || "http://localhost:3000";
+// Determine CORS origin based on environment (production ต้องมี fallback ไม่ใช่แค่ undefined)
+const corsOrigin = process.env.NODE_ENV === 'production'
+  ? (process.env.CORS_ORIGIN_PROD || process.env.CORS_ORIGIN || '*')
+  : (process.env.CORS_ORIGIN || "http://localhost:3000");
 
 // Security middleware
 app.use(helmet({
@@ -38,15 +40,15 @@ app.use(helmet({
 
 app.use(cors({
   origin: corsOrigin,
-  credentials: true,
+  credentials: corsOrigin !== '*', // CORS: credentials ใช้กับ '*' ไม่ได้ ต้องปิด
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization', 'X-API-Key'],
 }));
 
-// Rate limiting (more lenient for development)
+// Rate limiting: อุปกรณ์เยอะต้องไม่โดน block (skip /api/esp32 และ /api/health)
 const limiter = rateLimit({
-  windowMs: parseInt(process.env.RATE_LIMIT_WINDOW_MS) || 15 * 60 * 1000, // 15 minutes
-  max: parseInt(process.env.RATE_LIMIT_MAX_REQUESTS) || 100,
+  windowMs: parseInt(process.env.RATE_LIMIT_WINDOW_MS) || 15 * 60 * 1000, // 15 min
+  max: parseInt(process.env.RATE_LIMIT_MAX_REQUESTS) || 2000, // สูงขึ้นให้หลาย device
   message: {
     error: 'Too many requests from this IP, please try again later.',
     retryAfter: Math.ceil(parseInt(process.env.RATE_LIMIT_WINDOW_MS) / 1000 / 60),
@@ -54,8 +56,13 @@ const limiter = rateLimit({
   standardHeaders: true,
   legacyHeaders: false,
   skip: (req) => {
-    // Skip rate limiting for health checks and in development
-    return req.path === '/api/health' || process.env.NODE_ENV === 'development';
+    if (process.env.NODE_ENV === 'development') return true;
+    // ไม่จำกัด device API และ health เพื่อให้ ESP32 หลายตัวใช้งานได้
+    const p = (req.path || '').replace(/\/$/, '');
+    if (p === '/api/health' || p === '/api/ready') return true;
+    if (p.startsWith('/api/esp32')) return true;
+    if (p.startsWith('/api/raspi')) return true;
+    return false;
   },
 });
 
@@ -65,7 +72,7 @@ app.use('/api/', limiter);
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
-// Health check endpoint (before database connection)
+// Health check (ไม่ต้องต่อ DB) – ใช้ load balancer / k8s liveness
 app.get('/api/health', (req, res) => {
   res.json({ 
     status: 'OK', 
@@ -73,6 +80,17 @@ app.get('/api/health', (req, res) => {
     version: '1.0.0',
     environment: process.env.NODE_ENV || 'development',
   });
+});
+
+// Readiness (ต่อ DB ได้) – ใช้ k8s readiness / load balancer ว่าแอปพร้อมรับ traffic
+app.get('/api/ready', async (req, res) => {
+  try {
+    const { prisma } = require('./lib/prisma');
+    await prisma.$queryRaw`SELECT 1`;
+    res.json({ status: 'ready', database: 'connected' });
+  } catch (e) {
+    res.status(503).json({ status: 'not ready', database: 'disconnected' });
+  }
 });
 
 // Initialize server
@@ -136,11 +154,13 @@ async function initializeDatabase() {
 
 // Routes
 app.use('/api/auth', authRoutes);
+app.use('/api/dashboard', dashboardRoutes);
 app.use('/api/devices', deviceRoutes);
 app.use('/api/projects', projectRoutes);
 app.use('/api/admin', adminRoutes);
 app.use('/api/premium', premiumRoutes);
-app.use('/api/esp32', apiRoutes); // ESP32 device API endpoints
+app.use('/api/esp32', apiRoutes);   // ESP32 device API
+app.use('/api/raspi', apiRoutes);  // Raspberry Pi ใช้ชุด endpoint เดียวกัน
 
 // Error handling middleware
 app.use((err, req, res, next) => {
@@ -167,7 +187,17 @@ app.use((err, req, res, next) => {
   });
 });
 
-// 404 handler
+// Self-host: เสิร์ฟ frontend build จาก backend (หนึ่ง port) เมื่อ SERVE_FRONTEND=1
+const frontendBuild = process.env.SERVE_FRONTEND && path.join(__dirname, '..', 'frontend', 'build');
+if (frontendBuild && require('fs').existsSync(frontendBuild)) {
+  app.use(express.static(frontendBuild));
+  app.get('*', (req, res, next) => {
+    if (req.originalUrl.startsWith('/api')) return next();
+    res.sendFile(path.join(frontendBuild, 'index.html'));
+  });
+}
+
+// 404 handler (API เท่านั้น ถ้าเปิด SERVE_FRONTEND แล้ว request ไม่ใช่ /api จะได้ index.html ด้านบน)
 app.use('*', (req, res) => {
   res.status(404).json({ 
     message: 'Route not found',

@@ -44,13 +44,13 @@ const dbHelpers = {
       const isActive = dbHelpers.user.isSubscriptionActive(user);
       
       if (user.subscription === 'PREMIUM' && isActive) {
-        return { devices: 50, projects: 100, storage: 5000 }; // 5GB
+        return { devices: 100, projects: 100, storage: 5000 }; // รองรับอุปกรณ์แยะ
       } else if (user.subscription === 'PRO' && isActive) {
-        return { devices: 20, projects: 50, storage: 2000 }; // 2GB
+        return { devices: 30, projects: 50, storage: 2000 };
       }
       
-      // FREE tier
-      return { devices: 3, projects: 5, storage: 100 }; // 100MB
+      // FREE tier - เพิ่มให้ลองใช้ได้หลายตัว
+      return { devices: 10, projects: 5, storage: 100 };
     }
   },
 
@@ -68,6 +68,20 @@ const dbHelpers = {
       where: { userId },
       include: { sensors: true }
     }),
+    findByUserIdPaginated: (userId, { limit = 50, offset = 0 } = {}) => {
+      const take = Math.min(Math.max(1, parseInt(limit, 10) || 50), 200);
+      const skip = Math.max(0, parseInt(offset, 10) || 0);
+      return Promise.all([
+        prisma.device.findMany({
+          where: { userId },
+          include: { sensors: true },
+          orderBy: { createdAt: 'desc' },
+          take,
+          skip
+        }),
+        prisma.device.count({ where: { userId } })
+      ]).then(([items, total]) => ({ items, total }));
+    },
     create: (data) => prisma.device.create({ data }),
     update: (id, data) => prisma.device.update({ where: { id }, data }),
     delete: (id) => prisma.device.delete({ where: { id } }),
@@ -97,6 +111,20 @@ const dbHelpers = {
       where: { userId },
       include: { devices: true }
     }),
+    findByUserIdPaginated: (userId, { limit = 50, offset = 0 } = {}) => {
+      const take = Math.min(Math.max(1, parseInt(limit, 10) || 50), 200);
+      const skip = Math.max(0, parseInt(offset, 10) || 0);
+      return Promise.all([
+        prisma.project.findMany({
+          where: { userId },
+          include: { devices: true },
+          orderBy: { updatedAt: 'desc' },
+          take,
+          skip
+        }),
+        prisma.project.count({ where: { userId } })
+      ]).then(([items, total]) => ({ items, total }));
+    },
     create: (data) => prisma.project.create({ data }),
     update: (id, data) => prisma.project.update({ where: { id }, data }),
     delete: (id) => prisma.project.delete({ where: { id } })

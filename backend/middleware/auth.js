@@ -1,6 +1,21 @@
 const jwt = require('jsonwebtoken');
 const { dbHelpers } = require('../lib/prisma');
 
+// Cache สำหรับ device API key (ลด DB load เมื่ออุปกรณ์จำนวนมาก) – TTL วินาที
+const DEVICE_CACHE_TTL_MS = (parseInt(process.env.DEVICE_CACHE_TTL_SEC, 10) || 60) * 1000;
+const deviceCache = new Map();
+function getCachedDevice(apiKey) {
+  const entry = deviceCache.get(apiKey);
+  if (!entry || Date.now() > entry.expires) return null;
+  return entry.device;
+}
+function setCachedDevice(apiKey, device) {
+  deviceCache.set(apiKey, { device, expires: Date.now() + DEVICE_CACHE_TTL_MS });
+}
+function invalidateDeviceCache(apiKey) {
+  deviceCache.delete(apiKey);
+}
+
 // Verify JWT token middleware
 const verifyToken = async (req, res, next) => {
   try {
@@ -47,23 +62,22 @@ const verifyPremium = (req, res, next) => {
   }
 };
 
-// Device API key verification (for ESP32 devices)
+// Device API key verification (cache ลด DB load เมื่ออุปกรณ์จำนวนมาก)
 const verifyDeviceApiKey = async (req, res, next) => {
   try {
     const apiKey = req.header('X-API-Key') || req.query.api_key;
-    
     if (!apiKey) {
       return res.status(401).json({ message: 'API key required.' });
     }
 
-    const device = await dbHelpers.device.findByApiKey(apiKey);
-    
-    if (!device || !device.isActive) {
-      return res.status(401).json({ message: 'Invalid API key.' });
+    let device = getCachedDevice(apiKey);
+    if (!device) {
+      device = await dbHelpers.device.findByApiKey(apiKey);
+      if (!device || !device.isActive) {
+        return res.status(401).json({ message: 'Invalid API key.' });
+      }
+      setCachedDevice(apiKey, device);
     }
-
-    // Update device last seen
-    await dbHelpers.device.updateLastSeen(device.id);
 
     req.device = device;
     req.user = device.user;
@@ -183,5 +197,6 @@ module.exports = {
   verifyDeviceApiKey,
   verifyDeviceAccess,
   verifyProjectAccess,
-  checkLimits
+  checkLimits,
+  invalidateDeviceCache
 };

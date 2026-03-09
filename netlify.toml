@@ -5,11 +5,12 @@
 [build.environment]
   NODE_VERSION = "18"
 
-# Redirect all API calls to serverless functions
+# Redirect all API calls to serverless functions (force so SPA never shadows)
 [[redirects]]
   from = "/api/*"
   to = "/.netlify/functions/api/:splat"
   status = 200
+  force = true
 
 # SPA fallback for React Router
 [[redirects]]
@@ -17,9 +18,10 @@
   to = "/index.html"
   status = 200
 
-# Functions configuration
+# Functions configuration (รวม backend เพื่อให้ require ทำงานบน Netlify)
 [functions]
   directory = "netlify/functions"
+  included_files = ["./backend/**"]
   
 # Headers for security and CORS
 [[headers]]

@@ -4,8 +4,8 @@ const path = require('path');
 // Set environment variables for backend
 process.env.NETLIFY = 'true';
 
-// Ensure the backend directory is in the path
-const backendPath = path.join(__dirname, '../../backend');
+// Backend ต้องอยู่ที่ ../../backend จาก netlify/functions (ใช้ static path เพื่อให้ bundler รวมไฟล์)
+const backendPath = path.join(__dirname, '..', '..', 'backend');
 process.chdir(backendPath);
 
 // Import the Express app
@@ -45,8 +45,12 @@ const handler = serverless(app, {
 
 // Export the handler
 module.exports.handler = async (event, context) => {
-  // Set context timeout
   context.callbackWaitsForEmptyEventLoop = false;
+  
+  // Rewrite path so Express sees /api/xxx (Netlify sends /.netlify/functions/api/xxx)
+  if (event.path && event.path.startsWith('/.netlify/functions/api')) {
+    event.path = '/api' + (event.path.slice('/.netlify/functions/api'.length) || '');
+  }
   
   try {
     const result = await handler(event, context);

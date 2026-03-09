@@ -74,6 +74,11 @@ The firmware communicates with the platform via RESTful API:
 - `POST /api/esp32/wifi-status` - WiFi connection status updates
 - `POST /api/esp32/logs` - Send log messages to platform
 
+### Raspberry Pi (ใช้ชุด endpoint เดียวกัน แค่เปลี่ยน prefix เป็น `/api/raspi/`)
+- `POST /api/raspi/heartbeat` - ส่ง `platform: "raspberry_pi"` หรือ `"raspi"` ใน body เพื่อให้ระบบบันทึกเป็น Raspi
+- `GET /api/raspi/config` - ดึง config และ pins
+- `POST /api/raspi/sensor-data`, `GET /api/raspi/time`, `POST /api/raspi/status`, `POST /api/raspi/logs` ฯลฯ ใช้ path เดียวกับ esp32 แทน prefix เป็น `raspi`
+
 ### Authentication:
 All API calls use the API key in the `X-API-Key` header for authentication.
 

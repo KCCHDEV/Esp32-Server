@@ -7,8 +7,8 @@ generator client {
 
 datasource db {
   provider  = "postgresql"
-  url       = env("NETLIFY_DATABASE_URL")
-  directUrl = env("NETLIFY_DATABASE_URL_UNPOOLED")
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
 }
 
 model User {
@@ -45,6 +45,7 @@ model Device {
   userId            String
   deviceId          String    @unique @default(cuid())
   apiKey            String    @unique
+  platform          String    @default("ESP32")  // ESP32 | RASPBERRY_PI | OTHER
   isOnline          Boolean   @default(false)
   lastSeen          DateTime  @default(now())
   firmwareVersion   String    @default("1.0.0")
@@ -55,7 +56,7 @@ model Device {
   // WiFi Configuration
   wifiSsid          String?
   wifiConnected     Boolean   @default(false)
-  wifiSignalStrength Int?
+  wifiSignalStrength Int?     // RSSI from device (API ส่งเป็น wifiSignal)
   wifiIpAddress     String?
 
   // Hardware Information
@@ -70,7 +71,9 @@ model Device {
   locationLat       Float?
   locationLng       Float?
 
-  // Statistics
+  // Statistics (uptime/memory จาก heartbeat)
+  uptime            Int?      // session uptime ms from device
+  memoryUsage       Int?      // free heap from device
   totalUptime       Int       @default(0)
   restartCount      Int       @default(0)
   lastRestart       DateTime?

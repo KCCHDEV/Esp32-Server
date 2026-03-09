@@ -5,23 +5,27 @@ const { dbHelpers } = require('../lib/prisma');
 
 const router = express.Router();
 
-// Get all projects for authenticated user
+// Get all projects for authenticated user (pagination: limit, offset)
 router.get('/', verifyToken, async (req, res) => {
   try {
-    const projects = await dbHelpers.project.findByUserId(req.user.id);
-    
+    const limit = Math.min(200, Math.max(1, parseInt(req.query.limit, 10) || 50));
+    const offset = Math.max(0, parseInt(req.query.offset, 10) || 0);
+    const { items, total } = await dbHelpers.project.findByUserIdPaginated(req.user.id, { limit, offset });
+
     res.json({
       message: 'Projects retrieved successfully',
-      projects: projects.map(project => ({
+      projects: items.map(project => ({
         id: project.id,
         name: project.name,
         description: project.description,
-        visibility: project.visibility,
-        status: project.status,
+        isActive: project.isActive,
+        category: project.category,
+        deploymentStatus: project.deploymentStatus,
         createdAt: project.createdAt,
         updatedAt: project.updatedAt,
         devices: project.devices
-      }))
+      })),
+      pagination: { limit, offset, total }
     });
   } catch (error) {
     console.error('Get projects error:', error);

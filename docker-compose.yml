@@ -1,0 +1,31 @@
+# Self-host: รันแอป + PostgreSQL (ใช้แค่ docker-compose up)
+services:
+  app:
+    build: .
+    ports:
+      - "3001:3001"
+    environment:
+      DATABASE_URL: postgresql://esp32:esp32secret@db:5432/esp32_db
+      DIRECT_URL: postgresql://esp32:esp32secret@db:5432/esp32_db
+      JWT_SECRET: change_this_jwt_secret_min_32_characters_long
+      NODE_ENV: production
+      SERVE_FRONTEND: 1
+    depends_on:
+      db:
+        condition: service_healthy
+  db:
+    image: postgres:15-alpine
+    environment:
+      POSTGRES_USER: esp32
+      POSTGRES_PASSWORD: esp32secret
+      POSTGRES_DB: esp32_db
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U esp32"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  pgdata:

@@ -1,31 +1,34 @@
 const express = require('express');
 const { body, validationResult } = require('express-validator');
 const { dbHelpers } = require('../lib/prisma');
-const { verifyToken, verifyDeviceAccess, checkLimits } = require('../middleware/auth');
+const { verifyToken, verifyDeviceAccess, checkLimits, invalidateDeviceCache } = require('../middleware/auth');
 const { v4: uuidv4 } = require('uuid');
 
 const router = express.Router();
 
-// Get all user devices
+// Get all user devices (รองรับจำนวนมาก: pagination ใช้ limit, offset)
 router.get('/', verifyToken, async (req, res) => {
   try {
-    const devices = await dbHelpers.device.findByUserId(req.user.id);
-    
+    const limit = Math.min(200, Math.max(1, parseInt(req.query.limit, 10) || 50));
+    const offset = Math.max(0, parseInt(req.query.offset, 10) || 0);
+    const { items, total } = await dbHelpers.device.findByUserIdPaginated(req.user.id, { limit, offset });
+
     res.json({
       message: 'Devices retrieved successfully',
-      devices: devices.map(device => ({
+      devices: items.map(device => ({
         id: device.id,
         name: device.name,
         description: device.description,
         deviceId: device.deviceId,
+        platform: device.platform || 'ESP32',
         isOnline: device.isOnline,
         lastSeen: device.lastSeen,
         firmwareVersion: device.firmwareVersion,
         createdAt: device.createdAt,
         sensors: device.sensors
-      }))
+      })),
+      pagination: { limit, offset, total }
     });
-
   } catch (error) {
     console.error('Get devices error:', error);
     res.status(500).json({ message: 'Internal server error' });
@@ -44,7 +47,8 @@ router.post('/', [
     .optional()
     .trim()
     .isLength({ max: 500 })
-    .withMessage('Description must be at most 500 characters')
+    .withMessage('Description must be at most 500 characters'),
+  body('platform').optional().isIn(['ESP32', 'RASPBERRY_PI', 'OTHER'])
 ], async (req, res) => {
   try {
     const errors = validationResult(req);
@@ -55,11 +59,10 @@ router.post('/', [
       });
     }
 
-    const { name, description } = req.body;
+    const { name, description, platform } = req.body;
 
-    // Generate unique device ID and API key
     const deviceId = uuidv4();
-    const apiKey = `esp32_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+    const apiKey = `dev_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
 
     const device = await dbHelpers.device.create({
       name,
@@ -67,6 +70,7 @@ router.post('/', [
       userId: req.user.id,
       deviceId,
       apiKey,
+      platform: platform || 'ESP32',
       isOnline: false,
       firmwareVersion: '1.0.0'
     });
@@ -79,6 +83,7 @@ router.post('/', [
         description: device.description,
         deviceId: device.deviceId,
         apiKey: device.apiKey,
+        platform: device.platform,
         isOnline: device.isOnline,
         createdAt: device.createdAt
       }
@@ -103,6 +108,7 @@ router.get('/:id', verifyToken, verifyDeviceAccess, async (req, res) => {
         description: device.description,
         deviceId: device.deviceId,
         apiKey: device.apiKey,
+        platform: device.platform || 'ESP32',
         isOnline: device.isOnline,
         lastSeen: device.lastSeen,
         firmwareVersion: device.firmwareVersion,
@@ -217,8 +223,10 @@ router.get('/:id/status', verifyToken, verifyDeviceAccess, async (req, res) => {
 // Regenerate device API key
 router.post('/:id/regenerate-key', verifyToken, verifyDeviceAccess, async (req, res) => {
   try {
-    const newApiKey = `esp32_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-    
+    const oldApiKey = req.device.apiKey;
+    const newApiKey = `dev_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+    invalidateDeviceCache(oldApiKey);
+
     const updatedDevice = await dbHelpers.device.update(req.params.id, { 
       apiKey: newApiKey 
     });

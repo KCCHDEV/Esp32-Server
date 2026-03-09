@@ -5,34 +5,56 @@ const { verifyDeviceApiKey } = require('../middleware/auth');
 
 const router = express.Router();
 
-// Device heartbeat and status update
+// Device heartbeat and status update (รองรับหลายอุปกรณ์)
 router.post('/heartbeat', verifyDeviceApiKey, [
   body('uptime').optional().isNumeric(),
   body('freeHeap').optional().isNumeric(),
   body('usedHeap').optional().isNumeric(),
   body('wifiSignal').optional().isNumeric(),
-  body('firmwareVersion').optional().isString()
+  body('firmwareVersion').optional().isString(),
+  body('wifiConnected').optional().isBoolean(),
+  body('chipModel').optional().isString(),
+  body('flashSize').optional().isString(),
+  body('cpuFreq').optional().isNumeric(),
+  body('platform').optional().isString()  // ESP32 | RASPBERRY_PI | OTHER
 ], async (req, res) => {
   try {
     const device = req.device;
-    const { 
-      uptime, 
-      freeHeap, 
-      usedHeap, 
-      wifiSignal, 
-      firmwareVersion 
+    const {
+      uptime,
+      freeHeap,
+      usedHeap,
+      wifiSignal,
+      firmwareVersion,
+      wifiConnected,
+      chipModel,
+      flashSize,
+      cpuFreq,
+      platform
     } = req.body;
 
-    // Update basic device status
     const updateData = {
       lastSeen: new Date(),
       isOnline: true
     };
 
+    const platformMap = { raspberry_pi: 'RASPBERRY_PI', raspi: 'RASPBERRY_PI', rpi: 'RASPBERRY_PI', esp32: 'ESP32' };
+    if (platform) {
+      const normalized = (platformMap[String(platform).toLowerCase()] || String(platform).toUpperCase());
+      if (['ESP32', 'RASPBERRY_PI', 'OTHER'].includes(normalized)) updateData.platform = normalized;
+    }
     if (firmwareVersion) updateData.firmwareVersion = firmwareVersion;
-    if (uptime !== undefined) updateData.uptime = uptime;
-    if (freeHeap !== undefined) updateData.memoryUsage = freeHeap;
-    if (wifiSignal !== undefined) updateData.wifiSignal = wifiSignal;
+    if (uptime !== undefined) updateData.uptime = Math.round(Number(uptime));
+    if (freeHeap !== undefined) {
+      updateData.freeHeap = freeHeap;
+      updateData.memoryUsage = freeHeap;
+    }
+    if (usedHeap !== undefined) updateData.usedHeap = usedHeap;
+    if (wifiSignal !== undefined) updateData.wifiSignalStrength = wifiSignal;
+    if (wifiConnected !== undefined) updateData.wifiConnected = wifiConnected;
+    if (chipModel) updateData.chipModel = chipModel;
+    if (flashSize) updateData.flashSize = flashSize;
+    if (cpuFreq !== undefined) updateData.cpuFreq = cpuFreq;
 
     await dbHelpers.device.update(device.id, updateData);
 
@@ -48,26 +70,39 @@ router.post('/heartbeat', verifyDeviceApiKey, [
   }
 });
 
-// Get device configuration
+// Get device configuration (รวม pins ให้ firmware ใช้)
 router.get('/config', verifyDeviceApiKey, async (req, res) => {
   try {
     const device = req.device;
+    const { prisma } = require('../lib/prisma');
+    const full = await prisma.device.findUnique({
+      where: { id: device.id },
+      include: { pins: true, sensors: true }
+    });
+    const pins = (full?.pins || []).map(p => ({
+      number: p.number,
+      mode: p.mode,
+      value: p.value,
+      isUsed: p.isUsed,
+      label: p.label || ''
+    }));
 
     res.json({
       message: 'Device configuration',
       config: {
         deviceId: device.deviceId,
         name: device.name,
+        platform: device.platform || 'ESP32',
         firmwareVersion: device.firmwareVersion,
-        updateInterval: 30000, // 30 seconds
-        sensors: device.sensors || [],
+        updateInterval: 30000,
+        sensors: full?.sensors || device.sensors || [],
         settings: {
           wifiReconnectDelay: 5000,
           maxRetries: 3
         }
-      }
+      },
+      pins
     });
-
   } catch (error) {
     console.error('Get config error:', error);
     res.status(500).json({ message: 'Internal server error' });

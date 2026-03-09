@@ -85,6 +85,9 @@ NETLIFY=true
 
 **🎉 That's it! Your ESP32 platform is now live!**
 
+**🖥️ Self-host:** อยากรันบนเซิร์ฟเวอร์ตัวเอง (VPS / Raspi / Docker) ดู [Self-Host Guide](docs/SELFHOST.md)  
+**📈 จำนวนมาก:** รองรับอุปกรณ์/ผู้ใช้เยอะ (pagination, cache, readiness) ดู [Scaling](docs/SCALING.md)
+
 ## 💻 Local Development
 
 ### Prerequisites

@@ -14,6 +14,7 @@
     "build:frontend": "cd frontend && npm run build",
     "build:backend": "cd backend && npm run build",
     "start": "cd backend && npm start",
+    "start:selfhost": "npm run build:frontend && node scripts/selfhost.js",
     "db:generate": "cd backend && npm run db:generate",
     "db:push": "cd backend && npm run db:push",
     "db:migrate": "cd backend && npm run db:migrate",
